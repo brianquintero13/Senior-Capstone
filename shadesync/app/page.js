@@ -3,6 +3,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Poppins } from "next/font/google";
 import AutoTimeModal from "./components/AutoTimeModal";
+import DisableScheduleModal from "./components/DisableScheduleModal";
 
 const poppins = Poppins({
   subsets: ["latin"],
@@ -13,6 +14,8 @@ export default function Home() {
   const [open, setOpen] = useState(true);
   const [manual, setManual] = useState(false);
   const [autoModalOpen, setAutoModalOpen] = useState(false);
+  const [disableModalOpen, setDisableModalOpen] = useState(false);
+  const [disableChoice, setDisableChoice] = useState("today");
   return (
     <div
       className={`relative min-h-screen w-full overflow-hidden bg-gradient-to-b from-[#87b5ff] via-[#bcd9ff] to-[#eef4ff] text-[#0f1c2e] ${poppins.className}`}
@@ -83,7 +86,10 @@ export default function Home() {
                 </span>
                 Set Auto Time
               </button>
-              <button className="flex flex-1 items-center justify-center rounded-full border border-blue-200 bg-white/70 px-6 py-3 text-lg font-medium text-slate-700 shadow hover:bg-white">
+              <button
+                className="flex flex-1 items-center justify-center rounded-full border border-blue-200 bg-white/70 px-6 py-3 text-lg font-medium text-slate-700 shadow hover:bg-white"
+                onClick={() => setDisableModalOpen(true)}
+              >
                 Disable Schedule
               </button>
             </div>
@@ -127,6 +133,12 @@ export default function Home() {
       <AutoTimeModal
         open={autoModalOpen}
         onClose={() => setAutoModalOpen(false)}
+      />
+      <DisableScheduleModal
+        open={disableModalOpen}
+        onClose={() => setDisableModalOpen(false)}
+        onConfirm={(choice) => setDisableChoice(choice)}
+        initialChoice={disableChoice}
       />
     </div>
   );
