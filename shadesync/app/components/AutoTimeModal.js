@@ -64,8 +64,8 @@ export default function AutoTimeModal({ open, onClose }) {
         className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity"
         onClick={onClose}
       />
-      <div className="relative z-10 w-full max-w-lg rounded-3xl border border-white/30 bg-white/85 p-8 shadow-[0_25px_80px_rgba(15,28,46,0.35)] backdrop-blur">
-        <div className="absolute inset-x-0 top-0 h-24 rounded-3xl bg-gradient-to-br from-[#ffe9a0]/70 via-[#ffd36a]/60 to-[#ffb347]/60 blur-2xl" />
+      <div className="relative z-10 w-full max-w-xl rounded-3xl border border-[#8cb4ff] bg-white p-8 shadow-[0_25px_80px_rgba(15,28,46,0.35)]">
+        <div className="absolute inset-x-0 top-0 h-24 rounded-3xl bg-gradient-to-b from-[#e9f2ff] to-transparent" />
         <div className="relative flex flex-col gap-6">
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -81,10 +81,10 @@ export default function AutoTimeModal({ open, onClose }) {
             </div>
             <button
               onClick={onClose}
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-white/60 bg-white/70 text-slate-600 shadow hover:bg-white"
+              className="flex h-10 w-10 items-center justify-center rounded-full text-2xl text-slate-700 transition hover:bg-slate-100"
               aria-label="Close dialog"
             >
-              ✕
+              ×
             </button>
           </div>
           <div className="flex w-fit self-center items-center rounded-full border border-blue-200 bg-white/60 p-1 text-base font-medium text-slate-600 shadow-inner">
@@ -106,12 +106,12 @@ export default function AutoTimeModal({ open, onClose }) {
           </div>
 
           {/* Time Set container */}
-          <div className="flex w-fit self-center rounded-2xl border border-blue-100 bg-white/70 px-4 py-3 shadow-inner">
+          <div className="flex w-fit self-center rounded-2xl border-2 border-[#5c8efa] bg-white/80 px-4 py-3 shadow-inner">
             <input
               type="time"
               value={timeInput || ""}
               onChange={(e) => setTimeInput(e.target.value)}
-              className="h-14 w-[190px] rounded-xl border border-blue-100 bg-white/90 px-4 text-lg font-semibold text-slate-800 shadow-inner outline-none focus:border-blue-300"
+              className="h-14 w-[190px] rounded-xl border border-blue-100 bg-white/90 px-4 text-lg font-semibold text-slate-800 shadow-inner outline-none focus:border-[#5c8efa]"
             />
           </div>
 
@@ -145,16 +145,16 @@ export default function AutoTimeModal({ open, onClose }) {
             </div>
           </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+          <div className="flex flex-col gap-3 sm:flex-row sm:justify-between">
             <button
               onClick={onClose}
-              className="rounded-full border border-slate-200 bg-white px-6 py-3 text-base font-medium text-slate-700 shadow-sm transition hover:bg-white/80"
+              className="rounded-full border-2 border-[#ff6b6b] bg-white px-6 py-3 text-base font-semibold text-slate-800 transition hover:bg-[#fff1f1]"
             >
               Cancel
             </button>
             <button
               onClick={handleSaveTime}
-              className="rounded-full bg-[#4ad463] px-6 py-3 text-base font-semibold text-white shadow-[0_15px_40px_rgba(74,212,99,0.45)] transition hover:brightness-105"
+              className="rounded-full border-2 border-[#4ad463] bg-white px-6 py-3 text-base font-semibold text-slate-800 transition hover:bg-[#f3fff7]"
             >
               Save Schedule
             </button>
