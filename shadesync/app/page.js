@@ -1,3 +1,5 @@
+'use client'
+import { useState } from "react";
 import Link from "next/link";
 import { Poppins } from "next/font/google";
 
@@ -7,6 +9,8 @@ const poppins = Poppins({
 });
 
 export default function Home() {
+  const [open, setOpen] = useState(true);
+  const [manual, setManual] = useState(false);
   return (
     <div
       className={`relative min-h-screen w-full overflow-hidden bg-gradient-to-b from-[#87b5ff] via-[#bcd9ff] to-[#eef4ff] text-[#0f1c2e] ${poppins.className}`}
@@ -37,10 +41,21 @@ export default function Home() {
               </span>
             </div>
             <div className="flex rounded-full border border-blue-200 bg-white/60 p-1 text-base font-medium text-slate-600 shadow-inner">
-              <button className="rounded-full bg-white px-6 py-2 text-slate-900 shadow-sm">
+              <button
+                onClick={() => setOpen(!open)}
+                className={`rounded-full px-6 py-2 transition-all ease-in-out duration-300
+                  ${open ? "bg-white text-slate-900 shadow-sm" : ""}`}
+              >
                 Open
               </button>
-              <button className="rounded-full px-6 py-2">Close</button>
+              <button
+                onClick={() => setOpen(!open)}
+                className={`rounded-full px-6 py-2  transition-all ease-in-out duration-300 ${
+                  !open ? "bg-white text-slate-900 shadown-sm" : ""
+                }`}
+              >
+                Close
+              </button>
             </div>
           </div>
 
@@ -72,9 +87,17 @@ export default function Home() {
           <div className="flex w-full flex-col items-center gap-4">
             <div className="flex w-full items-center justify-between rounded-full bg-white/70 px-6 py-3 text-lg font-medium text-slate-700 shadow-inner">
               <span>Manual Control</span>
-              <div className="flex h-9 w-16 items-center rounded-full border-2 border-orange-300 bg-white px-1">
-                <div className="ml-auto h-7 w-7 rounded-full bg-gradient-to-br from-[#ffba9d] to-[#ff5f5f] shadow" />
-              </div>
+              <button
+                onClick={() => setManual(!manual)}
+                aria-pressed={manual}
+                className={`relative flex h-9 w-16 items-center rounded-full border-2 px-1 transition-all duration-300 ease-in-out
+                  ${manual ? "border-[#ff7a63] bg-[#ff8c72] shadow-[0_12px_25px_rgba(255,124,99,0.4)]" : "border-[#ffd8c8] bg-[#fff1e9] shadow-inner"}`}
+              >
+                <span
+                  className={`h-7 w-7 rounded-full bg-gradient-to-br from-[#ffba9d] to-[#ff5f5f] shadow transition-all duration-300 ease-in-out
+                    ${manual ? "translate-x-7" : "translate-x-0"}`}
+                />
+              </button>
             </div>
             <div className="grid w-full grid-cols-1 gap-5 sm:grid-cols-2">
               <button className="rounded-2xl bg-[#4ad463] py-6 text-2xl font-semibold text-white shadow-[0_20px_45px_rgba(74,212,99,0.45)]">
