@@ -2,6 +2,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Poppins } from "next/font/google";
+import AutoTimeModal from "./components/AutoTimeModal";
 
 const poppins = Poppins({
   subsets: ["latin"],
@@ -11,6 +12,7 @@ const poppins = Poppins({
 export default function Home() {
   const [open, setOpen] = useState(true);
   const [manual, setManual] = useState(false);
+  const [autoModalOpen, setAutoModalOpen] = useState(false);
   return (
     <div
       className={`relative min-h-screen w-full overflow-hidden bg-gradient-to-b from-[#87b5ff] via-[#bcd9ff] to-[#eef4ff] text-[#0f1c2e] ${poppins.className}`}
@@ -43,14 +45,14 @@ export default function Home() {
             <div className="flex rounded-full border border-blue-200 bg-white/60 p-1 text-base font-medium text-slate-600 shadow-inner">
               <button
                 onClick={() => setOpen(!open)}
-                className={`rounded-full px-6 py-2 transition-all ease-in-out duration-300
+                className={`cursor-pointer rounded-full px-6 py-2 transition-all ease-in-out duration-300
                   ${open ? "bg-white text-slate-900 shadow-sm" : ""}`}
               >
                 Open
               </button>
               <button
                 onClick={() => setOpen(!open)}
-                className={`rounded-full px-6 py-2  transition-all ease-in-out duration-300 ${
+                className={`cursor-pointer rounded-full px-6 py-2  transition-all ease-in-out duration-300 ${
                   !open ? "bg-white text-slate-900 shadown-sm" : ""
                 }`}
               >
@@ -62,7 +64,10 @@ export default function Home() {
           <div className="flex flex-col items-center gap-4 text-center text-slate-800">
             <h2 className="text-2xl font-semibold">Today&apos;s Automation</h2>
             <div className="flex w-full flex-col gap-4 sm:flex-row">
-              <button className="flex flex-1 items-center justify-center gap-2 rounded-full border border-blue-200 bg-white/70 px-6 py-3 text-lg font-medium text-slate-700 shadow hover:bg-white">
+              <button
+                className="flex flex-1 items-center justify-center gap-2 rounded-full border border-blue-200 bg-white/70 px-6 py-3 text-lg font-medium text-slate-700 shadow hover:bg-white"
+                onClick={() => setAutoModalOpen(true)}
+              >
                 <span className="flex h-9 w-9 items-center justify-center rounded-full border border-blue-200 text-blue-500">
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -90,8 +95,12 @@ export default function Home() {
               <button
                 onClick={() => setManual(!manual)}
                 aria-pressed={manual}
-                className={`relative flex h-9 w-16 items-center rounded-full border-2 px-1 transition-all duration-300 ease-in-out
-                  ${manual ? "border-[#ff7a63] bg-[#ff8c72] shadow-[0_12px_25px_rgba(255,124,99,0.4)]" : "border-[#ffd8c8] bg-[#fff1e9] shadow-inner"}`}
+                className={`cursor-pointer relative flex h-9 w-16 items-center rounded-full border-2 px-1 transition-all duration-300 ease-in-out
+                  ${
+                    manual
+                      ? "border-[#ff7a63] bg-[#ff8c72] shadow-[0_12px_25px_rgba(255,124,99,0.4)]"
+                      : "border-[#ffd8c8] bg-[#fff1e9] shadow-inner"
+                  }`}
               >
                 <span
                   className={`h-7 w-7 rounded-full bg-gradient-to-br from-[#ffba9d] to-[#ff5f5f] shadow transition-all duration-300 ease-in-out
@@ -115,6 +124,10 @@ export default function Home() {
           </div>
         </section>
       </main>
+      <AutoTimeModal
+        open={autoModalOpen}
+        onClose={() => setAutoModalOpen(false)}
+      />
     </div>
   );
 }
