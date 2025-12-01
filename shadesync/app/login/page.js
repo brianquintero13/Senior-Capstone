@@ -1,4 +1,8 @@
+"use client";
 import Link from "next/link";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { signIn } from "next-auth/react";
 import { Poppins } from "next/font/google";
 
 const poppins = Poppins({
@@ -7,6 +11,29 @@ const poppins = Poppins({
 });
 
 export default function LoginPage() {
+  const router = useRouter();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const onSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+    const res = await signIn("credentials", {
+      email,
+      password,
+      redirect: false,
+    });
+    setLoading(false);
+    if (res?.error) {
+      setError("Invalid email or password");
+      return;
+    }
+    router.push("/");
+  };
+
   return (
     <div
       className={`relative min-h-screen w-full overflow-hidden bg-gradient-to-b from-[#7bb2ff] via-[#b6d8ff] to-[#f2f6ff] text-[#0f1c2e] ${poppins.className}`}
@@ -34,12 +61,14 @@ export default function LoginPage() {
             </p>
           </div>
 
-          <form className="flex flex-col gap-6 text-left">
+          <form className="flex flex-col gap-6 text-left" onSubmit={onSubmit}>
             <label className="text-sm font-medium text-slate-600">
               Email Address
               <input
                 type="email"
                 name="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 className="mt-2 w-full rounded-2xl border border-slate-200 bg-white/90 px-4 py-3 text-base text-slate-900 shadow-inner outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-200"
                 placeholder="you@example.com"
               />
@@ -50,6 +79,8 @@ export default function LoginPage() {
               <input
                 type="password"
                 name="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 className="mt-2 w-full rounded-2xl border border-slate-200 bg-white/90 px-4 py-3 text-base text-slate-900 shadow-inner outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-200"
                 placeholder="••••••••"
               />
@@ -68,11 +99,16 @@ export default function LoginPage() {
               </a>
             </div>
 
+            {error && (
+              <p className="text-sm text-red-600">{error}</p>
+            )}
+
             <button
               type="submit"
-              className="mt-4 rounded-2xl bg-gradient-to-r from-[#4ad463] to-[#3ab0ff] py-4 text-lg font-semibold text-white shadow-[0_20px_45px_rgba(74,212,99,0.35)] transition hover:shadow-[0_25px_50px_rgba(58,176,255,0.35)]"
+              disabled={loading}
+              className="mt-4 rounded-2xl bg-gradient-to-r from-[#4ad463] to-[#3ab0ff] py-4 text-lg font-semibold text-white shadow-[0_20px_45px_rgba(74,212,99,0.35)] transition hover:shadow-[0_25px_50px_rgba(58,176,255,0.35)] disabled:opacity-60"
             >
-              Sign Up
+              {loading ? "Logging in..." : "Log In"}
             </button>
           </form>
 

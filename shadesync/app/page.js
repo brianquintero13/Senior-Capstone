@@ -1,9 +1,10 @@
 'use client'
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Poppins } from "next/font/google";
 import AutoTimeModal from "./components/AutoTimeModal";
 import DisableScheduleModal from "./components/DisableScheduleModal";
+import { useSession } from "next-auth/react";
 
 const poppins = Poppins({
   subsets: ["latin"],
@@ -11,29 +12,69 @@ const poppins = Poppins({
 });
 
 export default function Home() {
+  const { data: session } = useSession();
   const [open, setOpen] = useState(true);
   const [manual, setManual] = useState(false);
   const [autoModalOpen, setAutoModalOpen] = useState(false);
   const [disableModalOpen, setDisableModalOpen] = useState(false);
   const [disableChoice, setDisableChoice] = useState("today");
+  const [serial, setSerial] = useState(null);
+
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      if (!session) {
+        setSerial(null);
+        return;
+      }
+      try {
+        const res = await fetch('/api/settings', { cache: 'no-store' });
+        if (!res.ok) throw new Error('settings');
+        const data = await res.json();
+        if (!mounted) return;
+        setSerial(data?.settings?.system?.serialNumber ?? "");
+      } catch {
+        if (mounted) setSerial("");
+      }
+    };
+    load();
+    return () => { mounted = false; };
+  }, [session]);
+
+  const needsSetup = Boolean(session) && serial !== null && String(serial).trim() === "";
   return (
     <div
       className={`relative min-h-screen w-full overflow-hidden bg-gradient-to-b from-[#87b5ff] via-[#bcd9ff] to-[#eef4ff] text-[#0f1c2e] ${poppins.className}`}
     >
       <div className="absolute right-6 top-6 z-20">
-        <Link
-          href="/login"
-          className="rounded-full border border-white/60 bg-white/40 px-6 py-2 text-base font-semibold text-[#0f1c2e] shadow-[0_10px_30px_rgba(52,101,183,0.25)] backdrop-blur transition hover:bg-white/70"
-        >
-          Log In
-        </Link>
+        {session ? (
+          <Link
+            href="/account"
+            className="rounded-full border border-white/60 bg-white/40 px-6 py-2 text-base font-semibold text-[#0f1c2e] shadow-[0_10px_30px_rgba(52,101,183,0.25)] backdrop-blur transition hover:bg-white/70"
+          >
+            Account Settings
+          </Link>
+        ) : (
+          <Link
+            href="/login"
+            className="rounded-full border border-white/60 bg-white/40 px-6 py-2 text-base font-semibold text-[#0f1c2e] shadow-[0_10px_30px_rgba(52,101,183,0.25)] backdrop-blur transition hover:bg-white/70"
+          >
+            Log In
+          </Link>
+        )}
       </div>
       {/* soft sun glow */}
       <div className="absolute -left-24 -top-24 h-64 w-64 rounded-full bg-gradient-to-br from-[#ffe9a0] via-[#ffd36a] to-[#ffb347] blur-[2px] shadow-[0_0_80px_rgba(255,210,100,0.7)]" />
       {/* subtle atmospheric glow */}
       <div className="pointer-events-none absolute inset-x-[-40%] bottom-[-60%] h-[80%] rounded-[50%] bg-white/30 blur-[100px]" />
-
       <main className="relative z-10 mx-auto flex min-h-screen w-full max-w-3xl flex-col items-center justify-center px-4 py-16">
+        {needsSetup ? (
+          <section className="flex w-full flex-col items-center gap-6 rounded-[36px] border border-white/20 bg-white/25 px-8 py-12 text-center shadow-[0_20px_60px_rgba(52,101,183,0.25)] backdrop-blur-2xl sm:px-12">
+            <h1 className="text-3xl font-semibold text-slate-900">Further Account Setup is Required</h1>
+            <p className="text-slate-700">Please check Account Settings to link your device and complete setup.</p>
+            <Link href="/account" className="rounded-full border border-white/60 bg-white/40 px-6 py-2 text-base font-semibold text-[#0f1c2e] shadow-[0_10px_30px_rgba(52,101,183,0.25)] backdrop-blur transition hover:bg-white/70">Go to Account Settings</Link>
+          </section>
+        ) : (
         <section className="flex w-full flex-col items-center gap-8 rounded-[36px] border border-white/20 bg-white/25 px-8 py-12 text-center shadow-[0_20px_60px_rgba(52,101,183,0.25)] backdrop-blur-2xl sm:px-12">
           <div className="flex flex-col items-center gap-2">
             <p className="text-lg font-medium text-slate-700">Current Time</p>
@@ -129,6 +170,7 @@ export default function Home() {
             System Online
           </div>
         </section>
+        )}
       </main>
       <AutoTimeModal
         open={autoModalOpen}

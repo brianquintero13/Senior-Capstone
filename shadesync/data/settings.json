@@ -1,0 +1,27 @@
+{
+  "test@gmail.com": {
+    "profile": {
+      "name": "Matthew Dauria"
+    },
+    "notifications": {
+      "deviceAlerts": true,
+      "scheduleNotifications": true,
+      "automationUpdates": false,
+      "systemAnnouncements": false
+    },
+    "automation": {
+      "openingPosition": 75,
+      "sunlightSensitivity": "Medium"
+    },
+    "appearance": {
+      "theme": "Light"
+    },
+    "meta": {
+      "lastPasswordResetAt": "2025-12-01T00:43:27.970Z"
+    },
+    "system": {
+      "serialNumber": "test",
+      "zipCode": "test"
+    }
+  }
+}
