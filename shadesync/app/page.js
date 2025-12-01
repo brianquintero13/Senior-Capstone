@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Poppins } from "next/font/google";
 import AutoTimeModal from "./components/AutoTimeModal";
 import DisableScheduleModal from "./components/DisableScheduleModal";
-import SmartRoutineModal from "./components/SmartRoutineModal";
+import SmartShadeModal from "./components/SmartShadeModal";
 import { useSession, signOut } from "next-auth/react";
 import ClockWithTimezones from "./components/ClockWithTimezones";
 
@@ -123,7 +123,7 @@ export default function Home() {
                                 type="button"
                                 onClick={() => setSmartModalOpen(true)}
                             >
-                                Set to Smart Routine
+                                Set to SmartShade
                             </button>
                         </div>
                     </div>
@@ -176,7 +176,7 @@ export default function Home() {
                 onConfirm={(choice) => setDisableChoice(choice)}
                 initialChoice={disableChoice}
             />
-            <SmartRoutineModal
+            <SmartShadeModal
                 open={smartModalOpen}
                 onClose={() => setSmartModalOpen(false)}
             />
