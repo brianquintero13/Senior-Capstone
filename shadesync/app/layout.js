@@ -1,6 +1,7 @@
 // app/layout.js
 import "./globals.css";
 import { Inter, Roboto_Mono } from "next/font/google";
+import Providers from "./components/Providers";
 
 // Replace Geist with Inter/Roboto Mono, keep the same CSS variable names
 const geistSans = Inter({
@@ -24,7 +25,9 @@ export default function RootLayout({ children }) {
     return (
         <html lang="en">
         <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        <Providers>
         {children}
+        </Providers>
         </body>
         </html>
     );
