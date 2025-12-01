@@ -31,8 +31,8 @@ export default function Home() {
                 return;
             }
             try {
-                const res = await fetch('/api/settings', { cache: 'no-store' });
-                if (!res.ok) throw new Error('settings');
+                const res = await fetch("/api/settings", { cache: "no-store" });
+                if (!res.ok) throw new Error("settings");
                 const data = await res.json();
                 if (!mounted) return;
                 setSerial(data?.settings?.system?.serialNumber ?? "");
@@ -41,10 +41,22 @@ export default function Home() {
             }
         };
         load();
-        return () => { mounted = false; };
+        return () => {
+            mounted = false;
+        };
     }, [session]);
 
-    const needsSetup = Boolean(session) && serial !== null && String(serial).trim() === "";
+    // Normalize serial and decide if more setup is required
+    const normalizedSerial =
+        serial === null ? null : String(serial).trim();
+
+    // needsSetup is true if user is logged in AND:
+    // - serial is empty, OR
+    // - serial is "test" (so teammate using test data still sees the setup screen)
+    const needsSetup =
+        Boolean(session) &&
+        normalizedSerial !== null &&
+        (normalizedSerial === "" || normalizedSerial.toLowerCase() === "test");
 
     return (
         <div
@@ -75,17 +87,43 @@ export default function Home() {
             <div className="pointer-events-none absolute inset-x-[-40%] bottom-[-60%] h-[80%] rounded-[50%] bg-white/30 blur-[100px]" />
 
             <main className="relative z-10 mx-auto flex min-h-screen w-full max-w-3xl flex-col items-center justify-center px-4 py-16">
-
-                {needsSetup ? (
+                {/* 1) Not logged in at all */}
+                {!session ? (
                     <section className="flex w-full flex-col items-center gap-6 rounded-[36px] border border-white/20 bg-white/25 px-8 py-12 text-center shadow-[0_20px_60px_rgba(52,101,183,0.25)] backdrop-blur-2xl sm:px-12">
-                        <h1 className="text-3xl font-semibold text-slate-900">Further Account Setup is Required</h1>
-                        <p className="text-slate-700">Please check Account Settings to link your device and complete setup.</p>
-                        <Link href="/account" className="rounded-full border border-white/60 bg-white/40 px-6 py-2 text-base font-semibold text-[#0f1c2e] shadow-[0_10px_30px_rgba(52,101,183,0.25)] backdrop-blur transition hover:bg-white/70">Go to Account Settings</Link>
+                        <h1 className="text-3xl font-semibold text-slate-900">
+                            Log In to Access ShadeSync
+                        </h1>
+                        <p className="text-slate-700">
+                            Please log in or create an account to view and control your
+                            ShadeSync device.
+                        </p>
+                        <Link
+                            href="/login"
+                            className="rounded-full border border-white/60 bg-white/40 px-6 py-2 text-base font-semibold text-[#0f1c2e] shadow-[0_10px_30px_rgba(52,101,183,0.25)] backdrop-blur transition hover:bg-white/70"
+                        >
+                            Go to Login
+                        </Link>
+                    </section>
+                ) : needsSetup ? (
+                    /* 2) Logged in but missing/placeholder serial */
+                    <section className="flex w-full flex-col items-center gap-6 rounded-[36px] border border-white/20 bg-white/25 px-8 py-12 text-center shadow-[0_20px_60px_rgba(52,101,183,0.25)] backdrop-blur-2xl sm:px-12">
+                        <h1 className="text-3xl font-semibold text-slate-900">
+                            Further Account Setup is Required
+                        </h1>
+                        <p className="text-slate-700">
+                            Please check Account Settings to link your device and complete
+                            setup.
+                        </p>
+                        <Link
+                            href="/account"
+                            className="rounded-full border border-white/60 bg-white/40 px-6 py-2 text-base font-semibold text-[#0f1c2e] shadow-[0_10px_30px_rgba(52,101,183,0.25)] backdrop-blur transition hover:bg-white/70"
+                        >
+                            Go to Account Settings
+                        </Link>
                     </section>
                 ) : (
-
+                    /* 3) Logged in & fully set up → main UI */
                     <section className="flex w-full flex-col items-center gap-8 rounded-[36px] border border-white/20 bg-white/25 px-8 py-12 text-center shadow-[0_20px_60px_rgba(52,101,183,0.25)] backdrop-blur-2xl sm:px-12">
-
                         <div className="flex flex-col items-center gap-2">
                             <p className="text-lg font-medium text-slate-700">Current Time</p>
 
@@ -118,12 +156,19 @@ export default function Home() {
                                     className="flex flex-1 items-center justify-center gap-2 rounded-full border border-blue-200 bg-white/70 px-6 py-3 text-lg font-medium text-slate-700 shadow hover:bg-white"
                                     onClick={() => setAutoModalOpen(true)}
                                 >
-                <span className="flex h-9 w-9 items-center justify-center rounded-full border border-blue-200 text-blue-500">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
-                    <circle cx="12" cy="12" r="9" />
-                    <path d="M12 7v5l3 2" />
-                  </svg>
-                </span>
+                  <span className="flex h-9 w-9 items-center justify-center rounded-full border border-blue-200 text-blue-500">
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        className="h-5 w-5"
+                    >
+                      <circle cx="12" cy="12" r="9" />
+                      <path d="M12 7v5l3 2" />
+                    </svg>
+                  </span>
                                     Set Schedule
                                 </button>
 
@@ -157,10 +202,10 @@ export default function Home() {
                                             : "border-[#ffd8c8] bg-[#fff1e9] shadow-inner"
                                     }`}
                                 >
-                <span
-                    className={`h-7 w-7 rounded-full bg-gradient-to-br from-[#ffba9d] to-[#ff5f5f] shadow transition-all duration-300 ease-in-out
+                  <span
+                      className={`h-7 w-7 rounded-full bg-gradient-to-br from-[#ffba9d] to-[#ff5f5f] shadow transition-all duration-300 ease-in-out
                     ${manual ? "translate-x-7" : "translate-x-0"}`}
-                />
+                  />
                                 </button>
                             </div>
 
@@ -178,7 +223,6 @@ export default function Home() {
                             <span className="h-3 w-3 rounded-full bg-lime-400 shadow-[0_0_12px_rgba(132,204,22,0.9)]" />
                             System Online
                         </div>
-
                     </section>
                 )}
             </main>
