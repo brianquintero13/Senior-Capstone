@@ -1,5 +1,9 @@
+'use client';
 import Link from "next/link";
 import { Poppins } from "next/font/google";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { signIn } from "next-auth/react";
 
 const poppins = Poppins({
   subsets: ["latin"],
@@ -7,6 +11,55 @@ const poppins = Poppins({
 });
 
 export default function SignupPage() {
+  const router = useRouter();
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const onSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+    if (!fullName.trim()) {
+      setError("Full name is required");
+      return;
+    }
+    if (!email || !password) {
+      setError("Email and password are required");
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError("Passwords do not match");
+      return;
+    }
+    setLoading(true);
+
+    const resp = await fetch("/api/signup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password, fullName }),
+    });
+    const body = await resp.json();
+    if (!resp.ok) {
+      setLoading(false);
+      setError(body.error || "Signup failed");
+      return;
+    }
+
+    const res = await signIn("credentials", {
+      email,
+      password,
+      redirect: false,
+    });
+    setLoading(false);
+    if (res?.error) {
+      setError(res.error);
+    } else {
+      router.push("/");
+    }
+  };
   return (
     <div
       className={`relative min-h-screen w-full overflow-hidden bg-linear-to-b from-[#7bb2ff] via-[#b6d8ff] to-[#f2f6ff] text-[#0f1c2e] ${poppins.className}`}
@@ -34,12 +87,14 @@ export default function SignupPage() {
             </p>
           </div>
 
-          <form className="flex flex-col gap-6 text-left">
+          <form className="flex flex-col gap-6 text-left" onSubmit={onSubmit}>
             <label className="text-sm font-medium text-slate-600">
-              Name
+              Full Name
               <input
                 type="text"
-                name="name"
+                name="fullName"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
                 className="mt-2 w-full rounded-2xl border border-slate-200 bg-white/90 px-4 py-3 text-base text-slate-900 shadow-inner outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-200"
                 placeholder="John Doe"
               />
@@ -50,6 +105,8 @@ export default function SignupPage() {
               <input
                 type="email"
                 name="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 className="mt-2 w-full rounded-2xl border border-slate-200 bg-white/90 px-4 py-3 text-base text-slate-900 shadow-inner outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-200"
                 placeholder="you@example.com"
               />
@@ -60,6 +117,8 @@ export default function SignupPage() {
               <input
                 type="password"
                 name="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 className="mt-2 w-full rounded-2xl border border-slate-200 bg-white/90 px-4 py-3 text-base text-slate-900 shadow-inner outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-200"
                 placeholder="••••••••"
               />
@@ -69,33 +128,22 @@ export default function SignupPage() {
               Confirm Password
               <input
                 type="password"
-                name="password"
+                name="confirmPassword"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
                 className="mt-2 w-full rounded-2xl border border-slate-200 bg-white/90 px-4 py-3 text-base text-slate-900 shadow-inner outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-200"
                 placeholder="••••••••"
               />
             </label>
 
-            <div className="flex items-center justify-between text-sm text-slate-600">
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 rounded border-slate-300 text-blue-500 focus:ring-blue-300"
-                />
-                Remember me
-              </label>
-              <a
-                href="#"
-                className="font-semibold text-blue-600 hover:underline"
-              >
-                Forgot password?
-              </a>
-            </div>
+            {error && <p className="text-sm text-red-600">{error}</p>}
 
             <button
               type="submit"
-              className="mt-4 rounded-2xl bg-gradient-to-r from-[#4ad463] to-[#3ab0ff] py-4 text-lg font-semibold text-white shadow-[0_20px_45px_rgba(74,212,99,0.35)] transition hover:shadow-[0_25px_50px_rgba(58,176,255,0.35)]"
+              disabled={loading}
+              className="mt-4 rounded-2xl bg-gradient-to-r from-[#4ad463] to-[#3ab0ff] py-4 text-lg font-semibold text-white shadow-[0_20px_45px_rgba(74,212,99,0.35)] transition hover:shadow-[0_25px_50px_rgba(58,176,255,0.35)] disabled:opacity-60"
             >
-              Sign up
+              {loading ? "Signing up..." : "Sign up"}
             </button>
           </form>
 

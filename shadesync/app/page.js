@@ -1,10 +1,10 @@
 'use client'
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Poppins } from "next/font/google";
 import AutoTimeModal from "./components/AutoTimeModal";
 import DisableScheduleModal from "./components/DisableScheduleModal";
-import SmartShadeModal from "./components/SmartShadeModal";
 import { useSession, signOut } from "next-auth/react";
 import ClockWithTimezones from "./components/ClockWithTimezones";
 
@@ -19,8 +19,115 @@ export default function Home() {
     const [manual, setManual] = useState(false);
     const [autoModalOpen, setAutoModalOpen] = useState(false);
     const [disableModalOpen, setDisableModalOpen] = useState(false);
-    const [smartModalOpen, setSmartModalOpen] = useState(false);
     const [disableChoice, setDisableChoice] = useState("today");
+    const [deviceError, setDeviceError] = useState("");
+    const [actionMessage, setActionMessage] = useState("");
+    const [actionError, setActionError] = useState("");
+
+    const router = useRouter();
+    useEffect(() => {
+        const controller = new AbortController();
+        const checkDevice = async () => {
+            try {
+                const res = await fetch("/api/devices", { cache: "no-store", signal: controller.signal });
+                if (res.status === 401) {
+                    router.push("/login");
+                    return;
+                }
+                if (res.status === 404) {
+                    router.push("/account?missingSerial=1");
+                    return;
+                }
+                if (!res.ok) throw new Error("Failed to load device");
+            } catch (err) {
+                if (controller.signal.aborted) return;
+                setDeviceError("Could not verify your device. Please try again.");
+            }
+        };
+        checkDevice();
+        return () => controller.abort();
+    }, [router]);
+
+    const handleDisableSchedule = async (choice) => {
+        setDisableChoice(choice);
+        setActionError("");
+        setActionMessage("");
+        const scope = choice === "entire" ? "all" : "today";
+        try {
+            const res = await fetch("/api/schedules", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ scope }),
+            });
+            if (!res.ok) {
+                const body = await res.json().catch(() => ({}));
+                throw new Error(body.error || "Failed to update schedule");
+            }
+            setActionMessage(scope === "all" ? "Schedule disabled" : "Schedule skipped for today");
+        } catch (err) {
+            setActionError(err.message || "Failed to update schedule");
+        }
+    };
+
+    const handleEnableSchedule = async () => {
+        setActionError("");
+        setActionMessage("");
+        try {
+            const res = await fetch("/api/schedules", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ scope: "enable" }),
+            });
+            if (!res.ok) {
+                const body = await res.json().catch(() => ({}));
+                throw new Error(body.error || "Failed to enable schedule");
+            }
+            setActionMessage("Schedule enabled");
+        } catch (err) {
+            setActionError(err.message || "Failed to enable schedule");
+        }
+    };
+
+    const toggleManual = async () => {
+        const nextMode = manual ? "auto" : "manual";
+        setManual(!manual);
+        setActionError("");
+        setActionMessage("");
+        try {
+            const res = await fetch("/api/device-mode", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ mode: nextMode }),
+            });
+            if (!res.ok) {
+                const body = await res.json().catch(() => ({}));
+                throw new Error(body.error || "Failed to update mode");
+            }
+            setActionMessage(nextMode === "manual" ? "Manual mode enabled" : "Manual mode disabled");
+        } catch (err) {
+            setManual(manual); // revert
+            setActionError(err.message || "Failed to update mode");
+        }
+    };
+
+    const sendCommand = async (action) => {
+        setActionError("");
+        setActionMessage("");
+        try {
+            const res = await fetch("/api/device-command", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action }),
+            });
+            if (!res.ok) {
+                const body = await res.json().catch(() => ({}));
+                throw new Error(body.error || "Command failed");
+            }
+            setActionMessage(`Command sent: ${action}`);
+        } catch (err) {
+            setActionError(err.message || "Command failed");
+        }
+    };
 
     return (
         <div
@@ -53,6 +160,29 @@ export default function Home() {
                     </Link>
                 )}
             </div>
+
+            {/* Device error banner */}
+            {deviceError && (
+                <div className="absolute left-0 right-0 top-0 z-30 flex justify-center px-4 pt-4">
+                    <div className="w-full max-w-2xl rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700 shadow">
+                        {deviceError}
+                    </div>
+                </div>
+            )}
+            {actionError && !deviceError && (
+                <div className="absolute left-0 right-0 top-0 z-30 flex justify-center px-4 pt-4">
+                    <div className="w-full max-w-2xl rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700 shadow">
+                        {actionError}
+                    </div>
+                </div>
+            )}
+            {actionMessage && !deviceError && !actionError && (
+                <div className="absolute left-0 right-0 top-0 z-30 flex justify-center px-4 pt-4">
+                    <div className="w-full max-w-2xl rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700 shadow">
+                        {actionMessage}
+                    </div>
+                </div>
+            )}
 
             {/* soft sun glow */}
             <div className="absolute -left-24 -top-24 h-64 w-64 rounded-full bg-gradient-to-br from-[#ffe9a0] via-[#ffd36a] to-[#ffb347] blur-[2px] shadow-[0_0_80px_rgba(255,210,100,0.7)]" />
@@ -117,14 +247,14 @@ export default function Home() {
                             >
                                 Disable Schedule
                             </button>
-
                             <button
                                 className="flex flex-1 items-center justify-center rounded-full border border-blue-200 bg-white/70 px-6 py-3 text-lg font-medium text-slate-700 shadow hover:bg-white"
+                                onClick={handleEnableSchedule}
                                 type="button"
-                                onClick={() => setSmartModalOpen(true)}
                             >
-                                Set to SmartShade
+                                Enable Schedule
                             </button>
+
                         </div>
                     </div>
 
@@ -132,7 +262,7 @@ export default function Home() {
                         <div className="flex w-full items-center justify-between rounded-full bg-white/70 px-6 py-3 text-lg font-medium text-slate-700 shadow-inner">
                             <span>Manual Control</span>
                             <button
-                                onClick={() => setManual(!manual)}
+                                onClick={toggleManual}
                                 aria-pressed={manual}
                                 className={`cursor-pointer relative flex h-9 w-16 items-center rounded-full border-2 px-1 transition-all duration-300 ease-in-out
                   ${
@@ -149,10 +279,16 @@ export default function Home() {
                         </div>
 
                         <div className="grid w-full grid-cols-1 gap-5 sm:grid-cols-2">
-                            <button className="rounded-2xl bg-[#4ad463] py-6 text-2xl font-semibold text-white shadow-[0_20px_45px_rgba(74,212,99,0.45)]">
+                            <button
+                                className="rounded-2xl bg-[#4ad463] py-6 text-2xl font-semibold text-white shadow-[0_20px_45px_rgba(74,212,99,0.45)]"
+                                onClick={() => sendCommand("open")}
+                            >
                                 Open
                             </button>
-                            <button className="rounded-2xl bg-[#e06a76] py-6 text-2xl font-semibold text-white shadow-[0_20px_45px_rgba(224,106,118,0.45)]">
+                            <button
+                                className="rounded-2xl bg-[#e06a76] py-6 text-2xl font-semibold text-white shadow-[0_20px_45px_rgba(224,106,118,0.45)]"
+                                onClick={() => sendCommand("close")}
+                            >
                                 Close
                             </button>
                         </div>
@@ -173,12 +309,8 @@ export default function Home() {
             <DisableScheduleModal
                 open={disableModalOpen}
                 onClose={() => setDisableModalOpen(false)}
-                onConfirm={(choice) => setDisableChoice(choice)}
+                onConfirm={(choice) => handleDisableSchedule(choice)}
                 initialChoice={disableChoice}
-            />
-            <SmartShadeModal
-                open={smartModalOpen}
-                onClose={() => setSmartModalOpen(false)}
             />
         </div>
     );

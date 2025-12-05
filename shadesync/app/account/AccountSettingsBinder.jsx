@@ -1,5 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
+import { ToastContainer, toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 import ToastPortal from "../components/ToastPortal";
 
 export default function AccountSettingsBinder() {
@@ -7,6 +10,19 @@ export default function AccountSettingsBinder() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState(false);
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const [shouldReturnHome, setShouldReturnHome] = useState(false);
+
+  useEffect(() => {
+    const missingSerial = searchParams?.get("missingSerial");
+    if (missingSerial) {
+      toast.warn("Please configure your serial number to continue.", {
+        toastId: "missing-serial",
+      });
+      setShouldReturnHome(true);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     let mounted = true;
@@ -51,8 +67,21 @@ export default function AccountSettingsBinder() {
         const serialValue = document.getElementById("serialValue");
         const zipValue = document.getElementById("zipValue");
 
-        const serialStr = typeof settings?.system?.serialNumber === "string" ? settings.system.serialNumber : "";
+        let serialStr = typeof settings?.system?.serialNumber === "string" ? settings.system.serialNumber : "";
         const zipStr = typeof settings?.system?.zipCode === "string" ? settings.system.zipCode : "";
+
+        // Prefer device serial from backend if available
+        try {
+          const deviceRes = await fetch("/api/devices", { cache: "no-store" });
+          if (deviceRes.ok) {
+            const { device } = await deviceRes.json();
+            if (device?.serial_number) {
+              serialStr = device.serial_number;
+            }
+          }
+        } catch (e) {
+          // ignore device fetch errors here; fallback to settings
+        }
 
         if (serial) serial.value = serialStr;
         if (zip) zip.value = zipStr;
@@ -149,17 +178,43 @@ export default function AccountSettingsBinder() {
       save(payload);
     };
 
-    const onSaveSystem = () => {
+    const onSaveSystem = async () => {
       const serialEl = document.getElementById("serialNumber");
       const zipEl = document.getElementById("zipCode");
       const serial = (serialEl?.value || "").trim();
       const zip = (zipEl?.value || "").trim();
+      setSaving(true);
+      setMessage("");
+      setError(false);
+
+      // First, claim serial if provided
+      if (serial) {
+        try {
+          const res = await fetch("/api/devices", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ serialNumber: serial }),
+          });
+          if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            throw new Error(body.error || "Serial claim failed");
+          }
+        } catch (e) {
+          setSaving(false);
+          setError(true);
+          setMessage(e.message || "Serial claim failed");
+          return;
+        }
+      }
+
+      // Persist zip (and optionally serial) to settings store for display
       const payload = {
         system: {
           serialNumber: serial,
           zipCode: zip,
         },
       };
+
       save(payload).then(() => {
         const serialInputRow = document.getElementById("serialInputRow");
         const zipInputRow = document.getElementById("zipInputRow");
@@ -177,7 +232,14 @@ export default function AccountSettingsBinder() {
           zipDisplayRow?.classList.remove("hidden");
           if (zipValue) zipValue.textContent = zip;
         }
-      });
+        if (shouldReturnHome) {
+          setMessage("Serial saved. Returning home...");
+          setTimeout(() => router.back(), 600);
+        }
+      }).catch(() => {
+        setError(true);
+        setMessage("Error saving system info");
+      }).finally(() => setSaving(false));
     };
 
     const onUpdateSerial = () => {
@@ -212,6 +274,7 @@ export default function AccountSettingsBinder() {
 
   return (
     <>
+      <ToastContainer position="top-right" autoClose={2500} newestOnTop closeOnClick pauseOnHover />
       <div className="mb-4 text-sm text-slate-600">
         {loading ? "Loading settings..." : null}
       </div>
