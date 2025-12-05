@@ -81,9 +81,14 @@ export default function AutoTimeModal({ open, onClose, onSaved }) {
     setError("");
     setSaving(true);
     try {
-      // ensure current input is committed
-      commitCurrentValue();
-      const updatedSchedule = { ...schedule };
+      const updatedSchedule = {
+        ...schedule,
+        [selectedDay]: {
+          ...schedule[selectedDay],
+          ...(timeInput ? { [openShades ? "open" : "close"]: timeInput } : { [openShades ? "open" : "close"]: "" }),
+        },
+      };
+      setSchedule(updatedSchedule);
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
       const res = await fetch("/api/schedules", {
         method: "POST",
