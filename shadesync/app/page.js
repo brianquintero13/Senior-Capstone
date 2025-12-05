@@ -9,6 +9,7 @@ import { useSession, signOut } from "next-auth/react";
 import ClockWithTimezones from "./components/ClockWithTimezones";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+import { useWeatherTheme } from "./hooks/useWeatherTheme";
 
 const poppins = Poppins({
     subsets: ["latin"],
@@ -25,6 +26,7 @@ export default function Home() {
     const [deviceError, setDeviceError] = useState("");
     const [scheduleEntries, setScheduleEntries] = useState({});
     const [scheduleFetchError, setScheduleFetchError] = useState("");
+    const { theme, loading: weatherLoading, error: weatherError } = useWeatherTheme();
 
     const router = useRouter();
     useEffect(() => {
@@ -154,25 +156,31 @@ export default function Home() {
     };
     const todayTime = scheduleEntries?.[todayKey]?.[open ? "open" : "close"];
 
-    const isNight = !open;
+    const isNight = theme.name?.startsWith("night");
+    const backgroundStyle = theme?.backgroundImage
+        ? {
+              backgroundImage: theme.backgroundImage,
+              backgroundSize: "cover",
+              backgroundPosition: "center",
+              backgroundRepeat: "no-repeat",
+          }
+        : isNight
+          ? {
+                backgroundImage: "url('/night-bg.png')",
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+                backgroundRepeat: "no-repeat",
+            }
+          : {
+                background: "linear-gradient(to bottom, #87b5ff, #bcd9ff, #eef4ff)",
+            };
+
     return (
         <div
             className={`relative min-h-screen w-full overflow-hidden ${poppins.className} ${
                 isNight ? "text-[#f5f7fb]" : "text-[#0f1c2e]"
             }`}
-            style={
-                isNight
-                    ? {
-                          backgroundImage: "url('/night-bg.png')",
-                          backgroundSize: "cover",
-                          backgroundPosition: "center",
-                          backgroundRepeat: "no-repeat",
-                          backgroundColor: "#0b0b0f",
-                      }
-                    : {
-                          background: "linear-gradient(to bottom, #87b5ff, #bcd9ff, #eef4ff)",
-                      }
-            }
+            style={backgroundStyle}
         >
             {/* Top-right actions */}
             <div className="absolute right-6 top-6 z-20 flex items-center gap-3">
@@ -212,8 +220,13 @@ export default function Home() {
             )}
             <ToastContainer position="top-right" autoClose={2200} hideProgressBar />
 
-            {/* soft sun glow (hidden in night mode) */}
-            {!isNight && (
+            {/* Animated overlays */}
+            {isNight ? (
+                <div className="night-overlay">
+                    <div className="night-stars" />
+                    <div className="night-moon" />
+                </div>
+            ) : (
                 <>
                     <div className="absolute -left-24 -top-24 h-64 w-64 rounded-full bg-gradient-to-br from-[#ffe9a0] via-[#ffd36a] to-[#ffb347] blur-[2px] shadow-[0_0_80px_rgba(255,210,100,0.7)]" />
                     <div className="pointer-events-none absolute inset-x-[-40%] bottom-[-60%] h-[80%] rounded-[50%] bg-white/30 blur-[100px]" />
