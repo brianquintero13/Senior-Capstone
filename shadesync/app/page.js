@@ -154,9 +154,25 @@ export default function Home() {
     };
     const todayTime = scheduleEntries?.[todayKey]?.[open ? "open" : "close"];
 
+    const isNight = !open;
     return (
         <div
-            className={`relative min-h-screen w-full overflow-hidden bg-gradient-to-b from-[#87b5ff] via-[#bcd9ff] to-[#eef4ff] text-[#0f1c2e] ${poppins.className}`}
+            className={`relative min-h-screen w-full overflow-hidden ${poppins.className} ${
+                isNight ? "text-[#f5f7fb]" : "text-[#0f1c2e]"
+            }`}
+            style={
+                isNight
+                    ? {
+                          backgroundImage: "url('/night-bg.png')",
+                          backgroundSize: "cover",
+                          backgroundPosition: "center",
+                          backgroundRepeat: "no-repeat",
+                          backgroundColor: "#0b0b0f",
+                      }
+                    : {
+                          background: "linear-gradient(to bottom, #87b5ff, #bcd9ff, #eef4ff)",
+                      }
+            }
         >
             {/* Top-right actions */}
             <div className="absolute right-6 top-6 z-20 flex items-center gap-3">
@@ -196,20 +212,28 @@ export default function Home() {
             )}
             <ToastContainer position="top-right" autoClose={2200} hideProgressBar />
 
-            {/* soft sun glow */}
-            <div className="absolute -left-24 -top-24 h-64 w-64 rounded-full bg-gradient-to-br from-[#ffe9a0] via-[#ffd36a] to-[#ffb347] blur-[2px] shadow-[0_0_80px_rgba(255,210,100,0.7)]" />
-
-            {/* subtle atmospheric glow */}
-            <div className="pointer-events-none absolute inset-x-[-40%] bottom-[-60%] h-[80%] rounded-[50%] bg-white/30 blur-[100px]" />
+            {/* soft sun glow (hidden in night mode) */}
+            {!isNight && (
+                <>
+                    <div className="absolute -left-24 -top-24 h-64 w-64 rounded-full bg-gradient-to-br from-[#ffe9a0] via-[#ffd36a] to-[#ffb347] blur-[2px] shadow-[0_0_80px_rgba(255,210,100,0.7)]" />
+                    <div className="pointer-events-none absolute inset-x-[-40%] bottom-[-60%] h-[80%] rounded-[50%] bg-white/30 blur-[100px]" />
+                </>
+            )}
 
             <main className="relative z-10 mx-auto flex min-h-screen w-full max-w-3xl flex-col items-center justify-center px-4 py-16">
                 {/* Always show main UI, logged in or not (demo mode) */}
-                <section className="flex w-full flex-col items-center gap-8 rounded-[36px] border border-white/20 bg-white/25 px-8 py-12 text-center shadow-[0_20px_60px_rgba(52,101,183,0.25)] backdrop-blur-2xl sm:px-12">
+                <section
+                    className={`flex w-full flex-col items-center gap-8 rounded-[36px] px-8 py-12 text-center backdrop-blur-2xl sm:px-12 ${
+                        isNight
+                            ? "border border-white/15 bg-black/30 shadow-[0_20px_60px_rgba(0,0,0,0.35)]"
+                            : "border border-white/20 bg-white/25 shadow-[0_20px_60px_rgba(52,101,183,0.25)]"
+                    }`}
+                >
                     <div className="flex flex-col items-center gap-2">
-                        <p className="text-lg font-medium text-slate-700">Current Time</p>
+                        <p className={`text-lg font-medium ${isNight ? "text-white" : "text-slate-700"}`}>Current Time</p>
 
                         {/* LIVE CLOCK */}
-                        <ClockWithTimezones />
+                        <ClockWithTimezones isNight={isNight} />
 
                         <div className="flex rounded-full border border-blue-200 bg-white/60 p-1 text-base font-medium text-slate-600 shadow-inner">
                             <button
@@ -230,11 +254,15 @@ export default function Home() {
                         </div>
                     </div>
 
-                    <div className="flex flex-col items-center gap-4 text-center text-slate-800">
+                    <div className={`flex flex-col items-center gap-4 text-center ${isNight ? "text-slate-100" : "text-slate-800"}`}>
                         <h2 className="text-2xl font-semibold">Today&apos;s Automation</h2>
                         <div className="flex w-full flex-col gap-4 sm:flex-row">
                             <button
-                                className="flex flex-1 items-center justify-center gap-2 rounded-full border border-blue-200 bg-white/70 px-6 py-3 text-lg font-medium text-slate-700 shadow hover:bg-white"
+                                className={`flex flex-1 items-center justify-center gap-2 rounded-full border px-6 py-3 text-lg font-medium shadow hover:bg-white ${
+                                    isNight
+                                        ? "border-white/30 bg-white/10 text-white hover:bg-white/20"
+                                        : "border-blue-200 bg-white/70 text-slate-700"
+                                }`}
                                 onClick={() => setAutoModalOpen(true)}
                             >
                 <span className="flex h-9 w-9 items-center justify-center rounded-full border border-blue-200 text-blue-500">
@@ -254,13 +282,21 @@ export default function Home() {
                             </button>
 
                             <button
-                                className="flex flex-1 items-center justify-center rounded-full border border-blue-200 bg-white/70 px-6 py-3 text-lg font-medium text-slate-700 shadow hover:bg-white"
+                                className={`flex flex-1 items-center justify-center rounded-full border px-6 py-3 text-lg font-medium shadow hover:bg-white ${
+                                    isNight
+                                        ? "border-white/30 bg-white/10 text-white hover:bg-white/20"
+                                        : "border-blue-200 bg-white/70 text-slate-700"
+                                }`}
                                 onClick={() => setDisableModalOpen(true)}
                             >
                                 Disable Schedule
                             </button>
                             <button
-                                className="flex flex-1 items-center justify-center rounded-full border border-blue-200 bg-white/70 px-6 py-3 text-lg font-medium text-slate-700 shadow hover:bg-white"
+                                className={`flex flex-1 items-center justify-center rounded-full border px-6 py-3 text-lg font-medium shadow hover:bg-white ${
+                                    isNight
+                                        ? "border-white/30 bg-white/10 text-white hover:bg-white/20"
+                                        : "border-blue-200 bg-white/70 text-slate-700"
+                                }`}
                                 onClick={handleEnableSchedule}
                                 type="button"
                             >
@@ -268,7 +304,13 @@ export default function Home() {
                             </button>
 
                         </div>
-                        <div className="w-full rounded-2xl border border-blue-100 bg-white/70 px-4 py-3 text-sm text-slate-700 shadow-inner">
+                        <div
+                            className={`w-full rounded-2xl px-4 py-3 text-sm shadow-inner ${
+                                isNight
+                                    ? "border border-white/20 bg-white/10 text-slate-100"
+                                    : "border border-blue-100 bg-white/70 text-slate-700"
+                            }`}
+                        >
                             {scheduleFetchError ? (
                                 <span className="text-red-600">{scheduleFetchError}</span>
                             ) : todayTime ? (
@@ -283,7 +325,11 @@ export default function Home() {
                     </div>
 
                     <div className="flex w-full flex-col items-center gap-4">
-                        <div className="flex w-full items-center justify-between rounded-full bg-white/70 px-6 py-3 text-lg font-medium text-slate-700 shadow-inner">
+                        <div
+                            className={`flex w-full items-center justify-between rounded-full px-6 py-3 text-lg font-medium shadow-inner ${
+                                isNight ? "bg-white/10 text-white" : "bg-white/70 text-slate-700"
+                            }`}
+                        >
                             <span>Manual Control</span>
                             <button
                                 onClick={toggleManual}
@@ -318,7 +364,7 @@ export default function Home() {
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-2 text-lg font-medium text-slate-600">
+                    <div className={`flex items-center gap-2 text-lg font-medium ${isNight ? "text-slate-100" : "text-slate-600"}`}>
                         <span className="h-3 w-3 rounded-full bg-lime-400 shadow-[0_0_12px_rgba(132,204,22,0.9)]" />
                         System Online
                     </div>

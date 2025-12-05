@@ -15,7 +15,7 @@ const TIMEZONES = [
     { label: "Sydney (AEST)", short: "AEST", value: "Australia/Sydney" },
 ];
 
-function ClockWithTimezones() {
+function ClockWithTimezones({ isNight = false }) {
     const [selectedZone, setSelectedZone] = useState("America/New_York");
     const [now, setNow] = useState(null);
     const [showMenu, setShowMenu] = useState(false);
@@ -31,16 +31,24 @@ function ClockWithTimezones() {
     const activeZone =
         TIMEZONES.find((tz) => tz.value === selectedZone) || TIMEZONES[0];
 
+    const timeTextClass = isNight ? "text-white" : "text-slate-900";
+    const dateTextClass = isNight ? "text-slate-200" : "text-slate-600";
+    const tzBadgeClass = isNight
+        ? "bg-white/15 border border-white/30 text-white shadow-none"
+        : "bg-white/80 border border-blue-100 text-slate-600 shadow-inner";
+    const dropdownBg = isNight ? "bg-slate-900 text-slate-100 border border-white/15" : "bg-white text-slate-700 border border-blue-100";
+    const dropdownHover = isNight ? "hover:bg-slate-800" : "hover:bg-blue-50";
+
     if (!now) {
         return (
             <div className="flex flex-col items-center gap-2">
                 <div className="flex items-baseline gap-2">
-          <span className="text-[64px] font-semibold leading-none tracking-tight text-slate-900">
+          <span className={`text-[64px] font-semibold leading-none tracking-tight ${timeTextClass}`}>
             --:--
           </span>
                     <button
                         type="button"
-                        className="mb-1 rounded-full bg-white/70 px-3 py-1 text-lg font-semibold text-slate-600 shadow-inner border border-blue-100"
+                        className={`mb-1 rounded-full px-3 py-1 text-lg font-semibold ${tzBadgeClass}`}
                     >
                         {activeZone.short}
                     </button>
@@ -68,28 +76,28 @@ function ClockWithTimezones() {
         <div className="relative flex flex-col items-center gap-3">
             {/* Big time + clickable timezone badge */}
             <div className="flex items-baseline gap-3">
-        <span className="text-[72px] font-semibold leading-none tracking-tight text-slate-900">
+        <span className={`text-[72px] font-semibold leading-none tracking-tight ${timeTextClass}`}>
           {timeString}
         </span>
 
                 <button
                     type="button"
                     onClick={() => setShowMenu((s) => !s)}
-                    className="mb-2 inline-flex items-center gap-1 rounded-full bg-white/80 px-3 py-1 text-sm font-semibold uppercase text-slate-600 shadow-inner border border-blue-100 cursor-pointer hover:bg-white"
+                    className={`mb-2 inline-flex items-center gap-1 rounded-full px-3 py-1 text-sm font-semibold uppercase cursor-pointer ${tzBadgeClass} ${isNight ? "hover:bg-white/25" : "hover:bg-white"}`}
                 >
                     <span>{activeZone.short}</span>
-                    <span className="text-xs text-slate-500">
+                    <span className={`text-xs ${isNight ? "text-slate-200" : "text-slate-500"}`}>
             {showMenu ? "▲" : "▼"}
           </span>
                 </button>
             </div>
 
-            <span className="text-sm text-slate-600">{dateString}</span>
+            <span className={`text-sm ${dateTextClass}`}>{dateString}</span>
 
             {/* Dropdown TIMEZONE MENU under the EST pill */}
             {showMenu && (
-                <div className="absolute top-[95px] right-0 z-50 w-40 rounded-xl border border-blue-100 bg-white shadow-xl">
-                    <ul className="py-1 text-sm text-slate-700">
+                <div className={`absolute top-[95px] right-0 z-50 w-40 rounded-xl shadow-xl ${dropdownBg}`}>
+                    <ul className="py-1 text-sm">
                         {TIMEZONES.map((tz) => (
                             <li
                                 key={tz.value}
@@ -97,7 +105,7 @@ function ClockWithTimezones() {
                                     setSelectedZone(tz.value);
                                     setShowMenu(false);
                                 }}
-                                className="cursor-pointer px-3 py-2 hover:bg-blue-50 rounded-lg transition select-none"
+                                className={`cursor-pointer px-3 py-2 rounded-lg transition select-none ${dropdownHover}`}
                             >
                                 {tz.short} — {tz.label.replace(` (${tz.short})`, "")}
                             </li>
