@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react'
+import { toast } from 'react-toastify'
 
 const defaultSchedule = {
   M: { open: "09:30", close: "" },
@@ -11,7 +12,7 @@ const defaultSchedule = {
   Su: { open: "", close: "" },
 };
 
-export default function AutoTimeModal({ open, onClose }) {
+export default function AutoTimeModal({ open, onClose, onSaved }) {
   if (!open) return null;
   const [openShades, setOpenShades] = useState(true);
   const [selectedDay, setSelectedDay] = useState("M");
@@ -20,6 +21,17 @@ export default function AutoTimeModal({ open, onClose }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const commitCurrentValue = (value = timeInput, day = selectedDay, isOpen = openShades) => {
+    if (!day) return;
+    setSchedule((prev) => ({
+      ...prev,
+      [day]: {
+        ...prev[day],
+        ...(value ? { [isOpen ? "open" : "close"]: value } : { [isOpen ? "open" : "close"]: "" }),
+      },
+    }));
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -46,24 +58,21 @@ export default function AutoTimeModal({ open, onClose }) {
     return () => {
       active = false;
     };
-  }, [open, selectedDay, openShades]);
+  }, [open]);
 
   const handleTimeChange = (time) => {
-    setSchedule((prev) => ({
-      ...prev,
-      [selectedDay]: {
-        ...prev[selectedDay],
-        [openShades ? "open" : "close"]: time,
-      },
-    }));
+    setTimeInput(time);
+    commitCurrentValue(time);
   };
 
   const handleSelectDay = (day) => {
+    commitCurrentValue();
     setSelectedDay(day);
     setTimeInput(schedule[day][openShades ? "open" : "close"] || "");
   };
 
   const handleToggleShades = (isOpen) => {
+    commitCurrentValue();
     setOpenShades(isOpen);
     setTimeInput(schedule[selectedDay][isOpen ? "open" : "close"] || "");
   };
@@ -72,14 +81,9 @@ export default function AutoTimeModal({ open, onClose }) {
     setError("");
     setSaving(true);
     try {
-      const updatedSchedule = {
-        ...schedule,
-        [selectedDay]: {
-          ...schedule[selectedDay],
-          ...(timeInput ? { [openShades ? "open" : "close"]: timeInput } : {}),
-        },
-      };
-      setSchedule(updatedSchedule);
+      // ensure current input is committed
+      commitCurrentValue();
+      const updatedSchedule = { ...schedule };
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
       const res = await fetch("/api/schedules", {
         method: "POST",
@@ -90,9 +94,12 @@ export default function AutoTimeModal({ open, onClose }) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error || "Failed to save schedule");
       }
+      toast.success("Schedule saved");
+      onSaved?.();
       onClose();
     } catch (err) {
       setError(err.message || "Failed to save schedule");
+      toast.error(err.message || "Failed to save schedule");
     } finally {
       setSaving(false);
     }
