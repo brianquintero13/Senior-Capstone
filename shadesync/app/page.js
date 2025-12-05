@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Poppins } from "next/font/google";
@@ -7,6 +7,8 @@ import AutoTimeModal from "./components/AutoTimeModal";
 import DisableScheduleModal from "./components/DisableScheduleModal";
 import { useSession, signOut } from "next-auth/react";
 import ClockWithTimezones from "./components/ClockWithTimezones";
+import { ToastContainer, toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 const poppins = Poppins({
     subsets: ["latin"],
@@ -21,8 +23,8 @@ export default function Home() {
     const [disableModalOpen, setDisableModalOpen] = useState(false);
     const [disableChoice, setDisableChoice] = useState("today");
     const [deviceError, setDeviceError] = useState("");
-    const [actionMessage, setActionMessage] = useState("");
-    const [actionError, setActionError] = useState("");
+    const [scheduleEntries, setScheduleEntries] = useState({});
+    const [scheduleFetchError, setScheduleFetchError] = useState("");
 
     const router = useRouter();
     useEffect(() => {
@@ -48,10 +50,27 @@ export default function Home() {
         return () => controller.abort();
     }, [router]);
 
+    const loadSchedule = useCallback(async () => {
+        try {
+            const res = await fetch("/api/schedules", { cache: "no-store" });
+            if (!res.ok) {
+                const body = await res.json().catch(() => ({}));
+                throw new Error(body.error || "Failed to load schedule");
+            }
+            const data = await res.json();
+            setScheduleEntries(data?.entries || {});
+            setScheduleFetchError("");
+        } catch (err) {
+            setScheduleFetchError(err.message || "Failed to load schedule");
+        }
+    }, []);
+
+    useEffect(() => {
+        loadSchedule();
+    }, [loadSchedule]);
+
     const handleDisableSchedule = async (choice) => {
         setDisableChoice(choice);
-        setActionError("");
-        setActionMessage("");
         const scope = choice === "entire" ? "all" : "today";
         try {
             const res = await fetch("/api/schedules", {
@@ -63,15 +82,13 @@ export default function Home() {
                 const body = await res.json().catch(() => ({}));
                 throw new Error(body.error || "Failed to update schedule");
             }
-            setActionMessage(scope === "all" ? "Schedule disabled" : "Schedule skipped for today");
+            toast.success(scope === "all" ? "Schedule disabled" : "Schedule skipped for today");
         } catch (err) {
-            setActionError(err.message || "Failed to update schedule");
+            toast.error(err.message || "Failed to update schedule");
         }
     };
 
     const handleEnableSchedule = async () => {
-        setActionError("");
-        setActionMessage("");
         try {
             const res = await fetch("/api/schedules", {
                 method: "PATCH",
@@ -82,17 +99,15 @@ export default function Home() {
                 const body = await res.json().catch(() => ({}));
                 throw new Error(body.error || "Failed to enable schedule");
             }
-            setActionMessage("Schedule enabled");
+            toast.success("Schedule enabled");
         } catch (err) {
-            setActionError(err.message || "Failed to enable schedule");
+            toast.error(err.message || "Failed to enable schedule");
         }
     };
 
     const toggleManual = async () => {
         const nextMode = manual ? "auto" : "manual";
         setManual(!manual);
-        setActionError("");
-        setActionMessage("");
         try {
             const res = await fetch("/api/device-mode", {
                 method: "POST",
@@ -103,16 +118,14 @@ export default function Home() {
                 const body = await res.json().catch(() => ({}));
                 throw new Error(body.error || "Failed to update mode");
             }
-            setActionMessage(nextMode === "manual" ? "Manual mode enabled" : "Manual mode disabled");
+            toast.success(nextMode === "manual" ? "Manual mode enabled" : "Manual mode disabled");
         } catch (err) {
             setManual(manual); // revert
-            setActionError(err.message || "Failed to update mode");
+            toast.error(err.message || "Failed to update mode");
         }
     };
 
     const sendCommand = async (action) => {
-        setActionError("");
-        setActionMessage("");
         try {
             const res = await fetch("/api/device-command", {
                 method: "POST",
@@ -123,11 +136,23 @@ export default function Home() {
                 const body = await res.json().catch(() => ({}));
                 throw new Error(body.error || "Command failed");
             }
-            setActionMessage(`Command sent: ${action}`);
+            toast.success(`Command sent: ${action}`);
         } catch (err) {
-            setActionError(err.message || "Command failed");
+            toast.error(err.message || "Command failed");
         }
     };
+
+    const dayAbbrs = ["Su", "M", "T", "W", "Th", "F", "Sa"];
+    const todayKey = dayAbbrs[new Date().getDay()];
+    const formatTimeLabel = (timeString) => {
+        if (!timeString) return "";
+        const [hourStr, minute] = timeString.split(":");
+        const hourNum = Number(hourStr);
+        const ampm = hourNum >= 12 ? "pm" : "am";
+        const hour12 = ((hourNum + 11) % 12) + 1;
+        return `${hour12}:${minute}${ampm}`;
+    };
+    const todayTime = scheduleEntries?.[todayKey]?.[open ? "open" : "close"];
 
     return (
         <div
@@ -169,20 +194,7 @@ export default function Home() {
                     </div>
                 </div>
             )}
-            {actionError && !deviceError && (
-                <div className="absolute left-0 right-0 top-0 z-30 flex justify-center px-4 pt-4">
-                    <div className="w-full max-w-2xl rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700 shadow">
-                        {actionError}
-                    </div>
-                </div>
-            )}
-            {actionMessage && !deviceError && !actionError && (
-                <div className="absolute left-0 right-0 top-0 z-30 flex justify-center px-4 pt-4">
-                    <div className="w-full max-w-2xl rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700 shadow">
-                        {actionMessage}
-                    </div>
-                </div>
-            )}
+            <ToastContainer position="top-right" autoClose={2200} hideProgressBar />
 
             {/* soft sun glow */}
             <div className="absolute -left-24 -top-24 h-64 w-64 rounded-full bg-gradient-to-br from-[#ffe9a0] via-[#ffd36a] to-[#ffb347] blur-[2px] shadow-[0_0_80px_rgba(255,210,100,0.7)]" />
@@ -256,6 +268,18 @@ export default function Home() {
                             </button>
 
                         </div>
+                        <div className="w-full rounded-2xl border border-blue-100 bg-white/70 px-4 py-3 text-sm text-slate-700 shadow-inner">
+                            {scheduleFetchError ? (
+                                <span className="text-red-600">{scheduleFetchError}</span>
+                            ) : todayTime ? (
+                                <span>
+                                    Today&apos;s {open ? "open" : "close"} time:{" "}
+                                    <span className="font-semibold">{formatTimeLabel(todayTime)}</span>
+                                </span>
+                            ) : (
+                                <span>No {open ? "open" : "close"} time set for today.</span>
+                            )}
+                        </div>
                     </div>
 
                     <div className="flex w-full flex-col items-center gap-4">
@@ -305,6 +329,7 @@ export default function Home() {
             <AutoTimeModal
                 open={autoModalOpen}
                 onClose={() => setAutoModalOpen(false)}
+                onSaved={loadSchedule}
             />
             <DisableScheduleModal
                 open={disableModalOpen}
