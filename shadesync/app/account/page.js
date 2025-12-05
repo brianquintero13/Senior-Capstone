@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import SignOutButton from "../components/SignOutButton";
 import AccountSettingsBinder from "./AccountSettingsBinder";
-import { getUserProfile } from "@/lib/settingsStore";
+import { supabaseService } from "@/lib/supabaseService";
 
 export const metadata = {
   title: "Account Settings | ShadeSync",
@@ -16,7 +16,12 @@ export default async function AccountPage() {
   }
 
   const { user } = session;
-  const profile = getUserProfile(user.email);
+  const { data: profileRow } = await supabaseService
+    .from("user_settings")
+    .select("profile_name")
+    .eq("user_id", user.id)
+    .single();
+  const profileName = profileRow?.profile_name || user?.name || "—";
 
   return (
     <div className="relative min-h-screen w-full overflow-hidden bg-gradient-to-b from-[#87b5ff] via-[#bcd9ff] to-[#eef4ff] text-[#0f1c2e]">
@@ -46,7 +51,7 @@ export default async function AccountPage() {
             <div className="rounded-2xl border border-slate-200 bg-white/90 p-6">
               <h2 className="text-lg font-semibold text-slate-900">Profile</h2>
               <p className="mt-2 text-slate-700">
-                <span className="font-medium">Name:</span> {profile?.name || user?.name || "—"}
+                <span className="font-medium">Name:</span> {profileName}
               </p>
               <p className="text-slate-700">
                 <span className="font-medium">Email:</span> {user?.email}

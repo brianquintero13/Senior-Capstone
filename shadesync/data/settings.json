@@ -23,5 +23,30 @@
       "serialNumber": "test",
       "zipCode": "test"
     }
+  },
+  "jrsussner@gmail.com": {
+    "profile": {
+      "name": ""
+    },
+    "notifications": {
+      "deviceAlerts": false,
+      "scheduleNotifications": false,
+      "automationUpdates": false,
+      "systemAnnouncements": false
+    },
+    "automation": {
+      "openingPosition": 75,
+      "sunlightSensitivity": "Medium"
+    },
+    "appearance": {
+      "theme": "Light"
+    },
+    "meta": {
+      "lastPasswordResetAt": null
+    },
+    "system": {
+      "serialNumber": "SS-1234ABC",
+      "zipCode": "33619"
+    }
   }
 }

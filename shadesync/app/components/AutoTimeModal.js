@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 const defaultSchedule = {
   M: { open: "09:30", close: "" },
@@ -17,6 +17,36 @@ export default function AutoTimeModal({ open, onClose }) {
   const [selectedDay, setSelectedDay] = useState("M");
   const [schedule, setSchedule] = useState(defaultSchedule);
   const [timeInput, setTimeInput] = useState(defaultSchedule.M.open);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    let active = true;
+    const load = async () => {
+      setLoading(true);
+      setError("");
+      try {
+        const res = await fetch("/api/schedules", { cache: "no-store" });
+        if (!res.ok) throw new Error("Failed to load schedule");
+        const body = await res.json();
+        const entries = body?.entries || {};
+        if (!active) return;
+        const merged = { ...defaultSchedule, ...entries };
+        setSchedule(merged);
+        setTimeInput(merged[selectedDay]?.[openShades ? "open" : "close"] || "");
+      } catch (e) {
+        if (active) setError(e.message || "Failed to load schedule");
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+    load();
+    return () => {
+      active = false;
+    };
+  }, [open, selectedDay, openShades]);
 
   const handleTimeChange = (time) => {
     setSchedule((prev) => ({
@@ -38,9 +68,34 @@ export default function AutoTimeModal({ open, onClose }) {
     setTimeInput(schedule[selectedDay][isOpen ? "open" : "close"] || "");
   };
 
-  const handleSaveTime = () => {
-    if (!timeInput) return;
-    handleTimeChange(timeInput);
+  const handleSaveSchedule = async () => {
+    setError("");
+    setSaving(true);
+    try {
+      const updatedSchedule = {
+        ...schedule,
+        [selectedDay]: {
+          ...schedule[selectedDay],
+          ...(timeInput ? { [openShades ? "open" : "close"]: timeInput } : {}),
+        },
+      };
+      setSchedule(updatedSchedule);
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+      const res = await fetch("/api/schedules", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ schedule: updatedSchedule, timezone }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Failed to save schedule");
+      }
+      onClose();
+    } catch (err) {
+      setError(err.message || "Failed to save schedule");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const formatTimeLabel = (timeString) => {
@@ -153,12 +208,16 @@ export default function AutoTimeModal({ open, onClose }) {
               Cancel
             </button>
             <button
-              onClick={handleSaveTime}
-              className="rounded-full border-2 border-[#4ad463] bg-white px-6 py-3 text-base font-semibold text-slate-800 transition hover:bg-[#f3fff7]"
-            >
-              Save Schedule
-            </button>
-          </div>
+      onClick={handleSaveSchedule}
+      disabled={saving}
+      className="rounded-full border-2 border-[#4ad463] bg-white px-6 py-3 text-base font-semibold text-slate-800 transition hover:bg-[#f3fff7] disabled:opacity-60"
+    >
+      {saving ? "Saving..." : loading ? "Loading..." : "Save Schedule"}
+    </button>
+  </div>
+  {error && (
+    <p className="text-sm text-red-600 text-center">{error}</p>
+  )}
         </div>
       </div>
     </div>
