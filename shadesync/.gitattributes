@@ -1,0 +1,6 @@
+videos filter=lfs diff=lfs merge=lfs -text
+Sunny.mp4 filter=lfs diff=lfs merge=lfs -text
+Cloudy.mp4 filter=lfs diff=lfs merge=lfs -text
+CloudyNight.mp4 filter=lfs diff=lfs merge=lfs -text
+Night.mp4 filter=lfs diff=lfs merge=lfs -text
+*.mp4 filter=lfs diff=lfs merge=lfs -text
