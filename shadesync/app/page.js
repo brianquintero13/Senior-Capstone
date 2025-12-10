@@ -10,6 +10,7 @@ import ClockWithTimezones from "./components/ClockWithTimezones";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { useWeatherTheme } from "./hooks/useWeatherTheme";
+import WeatherVideoBackground from "../components/WeatherVideoBackground";
 
 const poppins = Poppins({
     subsets: ["latin"],
@@ -26,7 +27,7 @@ export default function Home() {
     const [deviceError, setDeviceError] = useState("");
     const [scheduleEntries, setScheduleEntries] = useState({});
     const [scheduleFetchError, setScheduleFetchError] = useState("");
-    const { theme, loading: weatherLoading, error: weatherError } = useWeatherTheme();
+    const { theme, loading: weatherLoading, error: weatherError, weatherData } = useWeatherTheme();
 
     const router = useRouter();
     useEffect(() => {
@@ -180,8 +181,8 @@ export default function Home() {
             className={`relative min-h-screen w-full overflow-hidden ${poppins.className} ${
                 isNight ? "text-[#f5f7fb]" : "text-[#0f1c2e]"
             }`}
-            style={backgroundStyle}
         >
+            <WeatherVideoBackground weatherData={weatherData} />
             {/* Top-right actions */}
             <div className="absolute right-6 top-6 z-20 flex items-center gap-3">
                 {session ? (
@@ -220,18 +221,7 @@ export default function Home() {
             )}
             <ToastContainer position="top-right" autoClose={2200} hideProgressBar />
 
-            {/* Animated overlays */}
-            {isNight ? (
-                <div className="night-overlay">
-                    <div className="night-stars" />
-                    <div className="night-moon" />
-                </div>
-            ) : (
-                <>
-                    <div className="absolute -left-24 -top-24 h-64 w-64 rounded-full bg-gradient-to-br from-[#ffe9a0] via-[#ffd36a] to-[#ffb347] blur-[2px] shadow-[0_0_80px_rgba(255,210,100,0.7)]" />
-                    <div className="pointer-events-none absolute inset-x-[-40%] bottom-[-60%] h-[80%] rounded-[50%] bg-white/30 blur-[100px]" />
-                </>
-            )}
+            {/* Weather-based video background will handle the visual theme */}
 
             <main className="relative z-10 mx-auto flex min-h-screen w-full max-w-3xl flex-col items-center justify-center px-4 py-16">
                 {/* Always show main UI, logged in or not (demo mode) */}

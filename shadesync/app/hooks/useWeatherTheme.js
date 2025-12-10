@@ -68,6 +68,7 @@ export function useWeatherTheme() {
   const [theme, setTheme] = useState(defaultTheme);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [weatherData, setWeatherData] = useState(null);
 
   useEffect(() => {
     let active = true;
@@ -135,6 +136,7 @@ export function useWeatherTheme() {
         }
         const weather = await weatherRes.json();
         if (!active) return;
+        setWeatherData(weather);
         const mapped = mapWeatherToTheme(weather);
         setTheme(mapped);
       } catch (e) {
@@ -151,5 +153,5 @@ export function useWeatherTheme() {
     };
   }, []);
 
-  return { theme, loading, error };
+  return { theme, loading, error, weatherData };
 }
