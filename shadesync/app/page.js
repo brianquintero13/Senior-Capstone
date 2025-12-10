@@ -363,14 +363,20 @@ export default function Home() {
 
                         <div className="grid w-full grid-cols-1 gap-5 sm:grid-cols-2">
                             <button
-                                className="rounded-2xl bg-[#4ad463] py-6 text-2xl font-semibold text-white shadow-[0_20px_45px_rgba(74,212,99,0.45)]"
-                                onClick={() => sendCommand("open")}
+                                className={`rounded-2xl py-6 text-2xl font-semibold text-white shadow-[0_20px_45px_rgba(74,212,99,0.45)] transition ${
+                                    manual ? "bg-[#4ad463]" : "bg-[#a4e3b3] opacity-60 cursor-not-allowed"
+                                }`}
+                                onClick={() => manual && sendCommand("open")}
+                                disabled={!manual}
                             >
                                 Open
                             </button>
                             <button
-                                className="rounded-2xl bg-[#e06a76] py-6 text-2xl font-semibold text-white shadow-[0_20px_45px_rgba(224,106,118,0.45)]"
-                                onClick={() => sendCommand("close")}
+                                className={`rounded-2xl py-6 text-2xl font-semibold text-white shadow-[0_20px_45px_rgba(224,106,118,0.45)] transition ${
+                                    manual ? "bg-[#e06a76]" : "bg-[#f1b5bb] opacity-60 cursor-not-allowed"
+                                }`}
+                                onClick={() => manual && sendCommand("close")}
+                                disabled={!manual}
                             >
                                 Close
                             </button>

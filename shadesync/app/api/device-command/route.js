@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { supabaseService } from "@/lib/supabaseService";
+import { getResolvedDeviceMode, saveDeviceMode } from "@/lib/deviceModeStore";
 
 const ALLOWED_ACTIONS = ["open", "close", "stop"];
 
@@ -15,21 +16,57 @@ export async function POST(req) {
     return Response.json({ error: "Invalid action" }, { status: 400 });
   }
 
-  const { data: device, error: deviceErr } = await supabaseService
+  let device = null;
+  let mode = null;
+  let manualExpiresAt = null;
+
+  const { data: deviceRow, error: deviceErr } = await supabaseService
     .from("devices")
-    .select("id, mode")
+    .select("id, mode, manual_expires_at")
     .eq("owner_id", session.user.id)
     .maybeSingle();
 
   if (deviceErr) {
-    return Response.json({ error: deviceErr.message }, { status: 400 });
+    const errMsg = deviceErr.message?.toLowerCase() || "";
+    const schemaMissing = errMsg.includes("'mode' column") || errMsg.includes("manual_expires_at");
+    if (!schemaMissing) {
+      return Response.json({ error: deviceErr.message }, { status: 400 });
+    }
+    const { data: fallbackDevice, error: fallbackErr } = await supabaseService
+      .from("devices")
+      .select("id")
+      .eq("owner_id", session.user.id)
+      .maybeSingle();
+    if (fallbackErr) {
+      return Response.json({ error: fallbackErr.message }, { status: 400 });
+    }
+    device = fallbackDevice;
+  } else {
+    device = deviceRow;
+    mode = deviceRow?.mode || null;
+    manualExpiresAt = deviceRow?.manual_expires_at || null;
   }
+
   if (!device) {
     return Response.json({ error: "No device found for this user" }, { status: 404 });
   }
 
-  // Enforce manual vs auto: if device is in manual mode, reject schedule-triggered commands
-  if (device.mode === "manual" && source === "schedule") {
+  const storedMode = getResolvedDeviceMode(device.id);
+  if (mode) {
+    saveDeviceMode(device.id, mode, manualExpiresAt);
+  } else if (storedMode?.mode) {
+    mode = storedMode.mode;
+    manualExpiresAt = storedMode.manual_expires_at || null;
+  }
+
+  const expiresAt = manualExpiresAt || storedMode.manual_expires_at;
+  const hasExpired = expiresAt ? new Date(expiresAt).getTime() < Date.now() : false;
+  const effectiveMode = hasExpired ? "auto" : mode || storedMode.mode || "auto";
+  if (hasExpired) {
+    saveDeviceMode(device.id, "auto", null);
+  }
+
+  if (effectiveMode === "manual" && source === "schedule") {
     return Response.json({ error: "Device is in manual mode; schedule commands are blocked" }, { status: 409 });
   }
 
@@ -54,9 +91,9 @@ export async function POST(req) {
       user_id: session.user.id,
       command: action,
       status: "pending",
-      metadata: { source, modeAtCommand: device.mode || "auto" },
+      metadata: { source, modeAtCommand: effectiveMode },
     })
     .catch(() => {});
 
-  return Response.json({ ok: true, action, mode: device.mode, source });
+  return Response.json({ ok: true, action, mode: effectiveMode, source });
 }
