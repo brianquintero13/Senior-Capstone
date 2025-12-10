@@ -1,10 +1,27 @@
 export const getWeatherVideo = (weatherData) => {
   if (!weatherData) return '/videos/Sunny.mp4';
   
-  const isDaytime = weatherData.current?.is_day !== 0;
+  const isDaytime = weatherData.isDay !== false; // Default to true if not specified
+  const weatherCondition = weatherData.condition?.toLowerCase() || '';
   const weatherCode = weatherData.current?.condition?.code;
   
-  // Weather codes for cloudy/overcast conditions
+  // First check the weather condition string if available
+  if (weatherCondition) {
+    if (weatherCondition.includes('cloud') || weatherCondition.includes('overcast') || weatherCondition.includes('fog')) {
+      return isDaytime ? '/videos/Cloudy.mp4' : '/videos/CloudyNight.mp4';
+    }
+    if (weatherCondition.includes('rain') || weatherCondition.includes('drizzle') || weatherCondition.includes('shower')) {
+      return isDaytime ? '/videos/Rainy.mp4' : '/videos/RainyNight.mp4';
+    }
+    if (weatherCondition.includes('snow') || weatherCondition.includes('sleet') || weatherCondition.includes('blizzard')) {
+      return '/videos/Snowy.mp4';
+    }
+    if (weatherCondition.includes('thunder') || weatherCondition.includes('storm')) {
+      return isDaytime ? '/videos/Stormy.mp4' : '/videos/StormyNight.mp4';
+    }
+  }
+  
+  // Fall back to weather code if condition string doesn't match
   const cloudyCodes = [
     1009, // Overcast
     1135, // Fog
@@ -12,6 +29,7 @@ export const getWeatherVideo = (weatherData) => {
     1006, // Cloudy
     1003, // Partly cloudy
     1030, // Mist
+    1009, // Overcast
     1150, // Patchy light drizzle
     1153, // Light drizzle
     1168, // Freezing drizzle
@@ -31,9 +49,10 @@ export const getWeatherVideo = (weatherData) => {
     1276, // Moderate or heavy rain with thunder
   ];
 
-  if (cloudyCodes.includes(weatherCode)) {
+  if (weatherCode && cloudyCodes.includes(weatherCode)) {
     return isDaytime ? '/videos/Cloudy.mp4' : '/videos/CloudyNight.mp4';
   }
 
+  // Default to sunny/day or night based on time
   return isDaytime ? '/videos/Sunny.mp4' : '/videos/night.mp4';
 };

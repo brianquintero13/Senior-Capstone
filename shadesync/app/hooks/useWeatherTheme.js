@@ -106,35 +106,58 @@ export function useWeatherTheme() {
       setLoading(true);
       setError("");
       try {
-        // get user zip from settings
+        // Get user settings
+        console.log('Fetching user settings...');
         const settingsRes = await fetch("/api/settings", { cache: "no-store" });
         const settingsJson = settingsRes.ok ? await settingsRes.json() : {};
+        console.log('Settings API Response:', settingsJson);
+        
+        // Extract zip code
         const zip = settingsJson?.settings?.system?.zipCode || "";
+        console.log('Extracted Zip Code:', zip);
+        
         let query = "";
         if (zip) {
           query = `zip=${encodeURIComponent(zip)}`;
+          console.log('Using zip code for weather query:', query);
         } else {
+          console.log('No zip code found, trying geolocation...');
           try {
             const pos = await getGeoPosition();
             if (pos?.coords) {
               query = `lat=${pos.coords.latitude}&lon=${pos.coords.longitude}`;
+              console.log('Using geolocation for weather query:', query);
             }
-          } catch {
+          } catch (err) {
+            console.warn('Geolocation error:', err.message);
             // ignore geolocation errors; will fallback to default theme
           }
         }
 
-        const weatherRes = query
-          ? await fetch(`/api/weather?${query}`, { cache: "no-store" })
-          : null;
-        if (!weatherRes || !weatherRes.ok) {
-          if (weatherRes) {
-            const body = await weatherRes.json().catch(() => ({}));
-            throw new Error(body.error || "Weather fetch failed");
-          }
+        if (!query) {
+          console.warn('No location data available for weather');
           throw new Error("No location available for weather");
         }
+
+        console.log('Fetching weather data...');
+        const weatherUrl = `/api/weather?${query}`;
+        console.log('Weather API URL:', weatherUrl);
+        
+        const weatherRes = await fetch(weatherUrl, { cache: "no-store" });
+        
+        if (!weatherRes.ok) {
+          const errorText = await weatherRes.text().catch(() => 'Failed to read error response');
+          console.error('Weather API Error:', {
+            status: weatherRes.status,
+            statusText: weatherRes.statusText,
+            url: weatherUrl,
+            error: errorText
+          });
+          throw new Error(`Weather fetch failed: ${weatherRes.status} ${weatherRes.statusText}`);
+        }
+        
         const weather = await weatherRes.json();
+        console.log('Weather API Response:', weather);
         if (!active) return;
         setWeatherData(weather);
         const mapped = mapWeatherToTheme(weather);

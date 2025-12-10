@@ -46,7 +46,32 @@
     },
     "system": {
       "serialNumber": "SS-1234ABC",
-      "zipCode": "33619"
+      "zipCode": "33606"
+    }
+  },
+  "test2@gmail.com": {
+    "profile": {
+      "name": ""
+    },
+    "notifications": {
+      "deviceAlerts": false,
+      "scheduleNotifications": false,
+      "automationUpdates": false,
+      "systemAnnouncements": false
+    },
+    "automation": {
+      "openingPosition": 75,
+      "sunlightSensitivity": "Medium"
+    },
+    "appearance": {
+      "theme": "Light"
+    },
+    "meta": {
+      "lastPasswordResetAt": null
+    },
+    "system": {
+      "serialNumber": "SS-TEST1",
+      "zipCode": "33606"
     }
   }
 }

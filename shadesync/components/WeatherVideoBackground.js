@@ -13,6 +13,7 @@ export default function WeatherVideoBackground({ weatherData }) {
 
   const videoSource = useMemo(() => {
     const source = getWeatherVideo(weatherData);
+    console.log (weatherData);
     console.log('Selected video source:', source, 'Weather data:', weatherData);
     return source;
   }, [weatherData]);
@@ -26,6 +27,7 @@ export default function WeatherVideoBackground({ weatherData }) {
     const playVideo = async () => {
       try {
         await video.play();
+        console.log(video);
       } catch (err) {
         console.error('Error playing video:', err);
       }
