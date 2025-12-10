@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { supabaseService } from "@/lib/supabaseService";
+import { saveDeviceMode } from "@/lib/deviceModeStore";
 
 export async function POST(req) {
   const session = await getServerSession(authOptions);
@@ -37,8 +38,15 @@ export async function POST(req) {
     .eq("id", device.id);
 
   if (updateErr) {
+    const errMsg = updateErr.message?.toLowerCase() || "";
+    const schemaMissing = errMsg.includes("'mode' column") || errMsg.includes("manual_expires_at");
+    if (schemaMissing) {
+      const stored = saveDeviceMode(device.id, payload.mode, payload.manual_expires_at);
+      return Response.json({ ok: true, mode: stored.mode, manual_expires_at: stored.manual_expires_at });
+    }
     return Response.json({ error: updateErr.message }, { status: 400 });
   }
 
-  return Response.json({ ok: true, mode: payload.mode, manual_expires_at: payload.manual_expires_at });
+  const stored = saveDeviceMode(device.id, payload.mode, payload.manual_expires_at);
+  return Response.json({ ok: true, mode: stored.mode, manual_expires_at: stored.manual_expires_at });
 }
