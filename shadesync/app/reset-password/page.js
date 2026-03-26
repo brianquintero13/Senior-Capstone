@@ -1,14 +1,51 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import ToastPortal from "@/app/components/ToastPortal";
+import { useRouter } from "next/navigation";
+import { Poppins } from "next/font/google";
+import { createClient } from "@/utils/supabase/client";
+
+const poppins = Poppins({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+});
 
 export default function ResetPasswordPage() {
+  const router = useRouter();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
+  const [mode, setMode] = useState("account");
+
+  useEffect(() => {
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const accessToken = hashParams.get("access_token");
+    const refreshToken = hashParams.get("refresh_token");
+    const type = hashParams.get("type");
+
+    if (type === "recovery" && accessToken && refreshToken) {
+      setMode("recovery");
+      const bootstrapRecoverySession = async () => {
+        try {
+          const supabase = createClient();
+          const { error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+          if (error) {
+            setMsg("Recovery link is invalid or expired.");
+            return;
+          }
+          window.history.replaceState(null, "", "/reset-password");
+        } catch {
+          setMsg("Recovery link is invalid or expired.");
+        }
+      };
+      bootstrapRecoverySession();
+    }
+  }, []);
 
   const onSubmit = async (e) => {
     e.preventDefault();
@@ -17,30 +54,47 @@ export default function ResetPasswordPage() {
       setMsg("Passwords do not match");
       return;
     }
+    if (newPassword.length < 8) {
+      setMsg("Password must be at least 8 characters");
+      return;
+    }
+
     setSaving(true);
     try {
-      const res = await fetch("/api/reset-password", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ currentPassword, newPassword }),
-      });
-      if (!res.ok) throw new Error("Reset failed");
-      setMsg("Password reset successful (demo)");
+      if (mode === "recovery") {
+        const supabase = createClient();
+        const { error } = await supabase.auth.updateUser({ password: newPassword });
+        if (error) throw error;
+        setMsg("Password reset successful. You can now log in.");
+      } else {
+        const res = await fetch("/api/reset-password", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ currentPassword, newPassword }),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(body.error || "Reset failed");
+        setMsg("Password updated.");
+      }
+
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
-    } catch (e) {
-      setMsg("Error resetting password");
+      router.replace("/login");
+    } catch (err) {
+      setMsg(err.message || "Error resetting password");
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <div className="relative min-h-screen w-full overflow-hidden bg-gradient-to-b from-[#87b5ff] via-[#bcd9ff] to-[#eef4ff] text-[#0f1c2e]">
+    <div
+      className={`relative min-h-screen w-full overflow-hidden bg-gradient-to-b from-[#7bb2ff] via-[#b6d8ff] to-[#f2f6ff] text-[#0f1c2e] ${poppins.className}`}
+    >
       <div className="absolute left-6 top-6 z-20">
         <Link
-          href="/account"
+          href={mode === "recovery" ? "/login" : "/account"}
           className="rounded-full border border-white/60 bg-white/40 px-5 py-2 text-sm font-semibold text-[#0f1c2e] shadow-[0_10px_30px_rgba(52,101,183,0.25)] backdrop-blur transition hover:bg-white/70"
         >
           ← Back
@@ -48,75 +102,71 @@ export default function ResetPasswordPage() {
       </div>
 
       <main className="relative z-10 mx-auto flex min-h-screen w-full max-w-2xl items-center justify-center px-4 py-16">
-        <section className="w-full rounded-[32px] border border-white/30 bg-white/60 px-8 py-8 shadow-[0_25px_80px_rgba(52,101,183,0.3)] backdrop-blur-2xl sm:px-16">
-          <div className="mb-8">
-            <h1 className="text-3xl font-semibold text-slate-900">Reset Password</h1>
-            <p className="mt-2 text-sm text-slate-600">Enter your current and new password.</p>
+        <section className="w-full rounded-[32px] border border-white/30 bg-white/60 px-8 py-12 shadow-[0_25px_80px_rgba(52,101,183,0.3)] backdrop-blur-2xl sm:px-16">
+          <div className="mb-10 text-center">
+            <p className="text-sm font-medium uppercase tracking-[0.3em] text-slate-500">ShadeSync</p>
+            <h1 className="mt-2 text-4xl font-semibold text-slate-900">
+              {mode === "recovery" ? "Create New Password" : "Reset Password"}
+            </h1>
+            <p className="mt-3 text-base text-slate-600">
+              {mode === "recovery"
+                ? "Enter a new password for your account."
+                : "Enter your current password and choose a new one."}
+            </p>
           </div>
 
-          <form onSubmit={onSubmit} className="flex flex-col gap-6">
-            <div>
-              <label className="text-sm font-medium text-slate-600">Current Password</label>
-              <input
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                type="password"
-                className="mt-2 w-full rounded-2xl border border-slate-200 bg-white/90 px-4 py-3 text-base text-slate-900 shadow-inner outline-none"
-                placeholder="••••••••"
-              />
-            </div>
+          <form className="flex flex-col gap-6 text-left" onSubmit={onSubmit}>
+            {mode !== "recovery" && (
+              <label className="text-sm font-medium text-slate-600">
+                Current Password
+                <input
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  type="password"
+                  className="mt-2 w-full rounded-2xl border border-slate-200 bg-white/90 px-4 py-3 text-base text-slate-900 shadow-inner outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-200"
+                  placeholder="••••••••"
+                />
+              </label>
+            )}
 
-            <div>
-              <label className="text-sm font-medium text-slate-600">New Password</label>
+            <label className="text-sm font-medium text-slate-600">
+              New Password
               <input
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 type="password"
-                className="mt-2 w-full rounded-2xl border border-slate-200 bg-white/90 px-4 py-3 text-base text-slate-900 shadow-inner outline-none"
+                className="mt-2 w-full rounded-2xl border border-slate-200 bg-white/90 px-4 py-3 text-base text-slate-900 shadow-inner outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-200"
                 placeholder="••••••••"
               />
-            </div>
+            </label>
 
-            <div>
-              <label className="text-sm font-medium text-slate-600">Confirm New Password</label>
+            <label className="text-sm font-medium text-slate-600">
+              Confirm New Password
               <input
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 type="password"
-                className="mt-2 w-full rounded-2xl border border-slate-200 bg-white/90 px-4 py-3 text-base text-slate-900 shadow-inner outline-none"
+                className="mt-2 w-full rounded-2xl border border-slate-200 bg-white/90 px-4 py-3 text-base text-slate-900 shadow-inner outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-200"
                 placeholder="••••••••"
               />
-            </div>
+            </label>
 
-            {msg && <p className="text-sm text-slate-700">{msg}</p>}
+            {msg && (
+              <p className={`text-sm ${msg.toLowerCase().includes("success") || msg.toLowerCase().includes("updated") ? "text-green-700" : "text-red-600"}`}>
+                {msg}
+              </p>
+            )}
 
             <button
               type="submit"
               disabled={saving}
-              className="rounded-2xl bg-[#4069b3] px-5 py-3 text-base font-semibold text-white shadow hover:bg-[#4c79c9] disabled:opacity-60"
+              className="mt-2 rounded-2xl bg-gradient-to-r from-[#4ad463] to-[#3ab0ff] py-4 text-lg font-semibold text-white shadow-[0_20px_45px_rgba(74,212,99,0.35)] transition hover:shadow-[0_25px_50px_rgba(58,176,255,0.35)] disabled:opacity-60"
             >
-              {saving ? "Saving..." : "Save"}
+              {saving ? "Saving..." : "Save New Password"}
             </button>
           </form>
         </section>
       </main>
-      {(msg || saving) && (
-        <ToastPortal>
-          <div className="fixed inset-x-0 bottom-4 z-[1000] flex justify-center px-4">
-            <div
-              className={`rounded-full border px-4 py-2 text-sm shadow backdrop-blur ${
-                saving
-                  ? "border-blue-200 bg-white/70 text-slate-700"
-                  : msg?.toLowerCase().includes("error")
-                  ? "border-red-200 bg-red-50/90 text-red-700"
-                  : "border-green-200 bg-white/70 text-slate-800"
-              }`}
-            >
-              {saving ? "Saving..." : msg}
-            </div>
-          </div>
-        </ToastPortal>
-      )}
     </div>
   );
 }

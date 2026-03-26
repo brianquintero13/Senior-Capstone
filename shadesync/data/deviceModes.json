@@ -2,5 +2,13 @@
   "3e101960-4656-4f91-a403-d664283b3bb1": {
     "mode": "auto",
     "manual_expires_at": null
+  },
+  "b69b71ed-aa3d-496f-88a3-7a30f2cad9c9": {
+    "mode": "manual",
+    "manual_expires_at": "2030-01-01T00:00:00.000Z"
+  },
+  "7836fc15-cd6d-4318-98bf-9c5cc548b865": {
+    "mode": "auto",
+    "manual_expires_at": null
   }
 }

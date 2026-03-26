@@ -94,9 +94,9 @@ export default function LoginPage() {
                 />
                 Remember me
               </label>
-              <a href="#" className="font-semibold text-blue-600 hover:underline">
+              <Link href="/forgot-password" className="font-semibold text-blue-600 hover:underline">
                 Forgot password?
-              </a>
+              </Link>
             </div>
 
             {error && (

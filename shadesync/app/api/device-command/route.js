@@ -22,13 +22,16 @@ export async function POST(req) {
 
   const { data: deviceRow, error: deviceErr } = await supabaseService
     .from("devices")
-    .select("id, mode, manual_expires_at")
+    .select('id, "mode", manual_expires_at')
     .eq("owner_id", session.user.id)
     .maybeSingle();
 
   if (deviceErr) {
     const errMsg = deviceErr.message?.toLowerCase() || "";
-    const schemaMissing = errMsg.includes("'mode' column") || errMsg.includes("manual_expires_at");
+    const schemaMissing =
+      errMsg.includes("'mode' column") ||
+      errMsg.includes("manual_expires_at") ||
+      errMsg.includes("within group is required for ordered-set aggregate mode");
     if (!schemaMissing) {
       return Response.json({ error: deviceErr.message }, { status: 400 });
     }
@@ -92,8 +95,7 @@ export async function POST(req) {
       command: action,
       status: "pending",
       metadata: { source, modeAtCommand: effectiveMode },
-    })
-    .catch(() => {});
+    });
 
   return Response.json({ ok: true, action, mode: effectiveMode, source });
 }

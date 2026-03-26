@@ -3,7 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+const supabase = supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : null;
 
 export const authOptions = {
     session: { strategy: "jwt" },
@@ -14,7 +14,7 @@ export const authOptions = {
             async authorize(credentials) {
                 const email = credentials?.email;
                 const password = credentials?.password;
-                if (!email || !password) return null;
+                if (!supabase || !email || !password) return null;
                 const { data, error } = await supabase.auth.signInWithPassword({ email, password });
                 if (error || !data?.user) return null;
                 return {
