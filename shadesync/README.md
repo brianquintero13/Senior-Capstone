@@ -20,6 +20,28 @@ You can start editing the page by modifying `app/page.js`. The page auto-updates
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Arduino Manual Control Wiring
+
+Manual `Open` / `Close` buttons now send commands through the backend to the motor controller over USB serial, and both manual buttons are disabled while the motor is moving.
+
+Set these environment variables in `.env.local`:
+
+```bash
+SERIAL_PORT_PATH=/dev/tty.usbserial-0001
+SERIAL_BAUD_RATE=115200
+MOTOR_COMMAND_TIMEOUT_MS=25000
+```
+
+Endpoints used:
+
+- `POST /api/device-command` with `{ "action": "open" }` or `{ "action": "close" }`
+- `GET /api/device-status` as Server-Sent Events (`status` events)
+
+Arduino firmware is expected to:
+
+- Accept `OPEN` / `CLOSE` commands via serial (newline-terminated)
+- Emit `OPEN complete` / `CLOSE complete` when movement finishes
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

@@ -2,8 +2,11 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { supabaseService } from "@/lib/supabaseService";
 import { getResolvedDeviceMode, saveDeviceMode } from "@/lib/deviceModeStore";
+import { motorController } from "@/lib/motorController";
 
-const ALLOWED_ACTIONS = ["open", "close", "stop"];
+export const runtime = "nodejs";
+
+const ALLOWED_ACTIONS = ["open", "close"];
 
 export async function POST(req) {
   const session = await getServerSession(authOptions);
@@ -73,7 +76,19 @@ export async function POST(req) {
     return Response.json({ error: "Device is in manual mode; schedule commands are blocked" }, { status: 409 });
   }
 
-  // For now we just log the command; swap this with real hardware dispatch (MQTT/HTTP) later.
+  try {
+    await motorController.sendCommand(action);
+  } catch (err) {
+    if (err?.code === "BUSY") {
+      return Response.json({ error: "Motor is busy", status: motorController.getSnapshot() }, { status: 409 });
+    }
+    if (err?.code === "SERIAL_PORT_MISSING") {
+      return Response.json({ error: "Hardware serial port is not configured" }, { status: 503 });
+    }
+    return Response.json({ error: err?.message || "Failed to dispatch motor command" }, { status: 500 });
+  }
+
+  // Persist command history for auditability.
   const { error: logErr } = await supabaseService
     .from("device_commands")
     .insert({
@@ -93,9 +108,9 @@ export async function POST(req) {
       device_id: device.id,
       user_id: session.user.id,
       command: action,
-      status: "pending",
+      status: "sent",
       metadata: { source, modeAtCommand: effectiveMode },
     });
 
-  return Response.json({ ok: true, action, mode: effectiveMode, source });
+  return Response.json({ ok: true, action, mode: effectiveMode, source, motor: motorController.getSnapshot() });
 }

@@ -27,6 +27,9 @@ export default function Home() {
     const [deviceError, setDeviceError] = useState("");
     const [scheduleEntries, setScheduleEntries] = useState({});
     const [scheduleFetchError, setScheduleFetchError] = useState("");
+    const [motorBusy, setMotorBusy] = useState(false);
+    const [motorCurrentAction, setMotorCurrentAction] = useState(null);
+    const [motorLastError, setMotorLastError] = useState("");
     const { theme, loading: weatherLoading, error: weatherError, weatherData } = useWeatherTheme();
 
     const router = useRouter();
@@ -71,6 +74,25 @@ export default function Home() {
     useEffect(() => {
         loadSchedule();
     }, [loadSchedule]);
+
+    useEffect(() => {
+        if (!session?.user) return undefined;
+        const stream = new EventSource("/api/device-status");
+        stream.addEventListener("status", (event) => {
+            try {
+                const payload = JSON.parse(event.data || "{}");
+                setMotorBusy(Boolean(payload?.busy));
+                setMotorCurrentAction(payload?.currentAction || null);
+                setMotorLastError(payload?.lastError || "");
+            } catch {
+                // Ignore malformed events.
+            }
+        });
+        stream.onerror = () => {
+            // Let EventSource auto-reconnect; surface stale-state warning only if needed later.
+        };
+        return () => stream.close();
+    }, [session?.user]);
 
     const handleDisableSchedule = async (choice) => {
         setDisableChoice(choice);
@@ -129,7 +151,13 @@ export default function Home() {
     };
 
     const sendCommand = async (action) => {
+        if (motorBusy) {
+            toast.info("Motor is already moving. Please wait.");
+            return;
+        }
         try {
+            setMotorBusy(true);
+            setMotorCurrentAction(action);
             const res = await fetch("/api/device-command", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -139,8 +167,10 @@ export default function Home() {
                 const body = await res.json().catch(() => ({}));
                 throw new Error(body.error || "Command failed");
             }
-            toast.success(`Command sent: ${action}`);
+            toast.success(`${action === "open" ? "Opening" : "Closing"} shades`);
         } catch (err) {
+            setMotorBusy(false);
+            setMotorCurrentAction(null);
             toast.error(err.message || "Command failed");
         }
     };
@@ -354,23 +384,31 @@ export default function Home() {
                         <div className="grid w-full grid-cols-1 gap-5 sm:grid-cols-2">
                             <button
                                 className={`rounded-2xl py-6 text-2xl font-semibold text-white shadow-[0_20px_45px_rgba(74,212,99,0.45)] transition ${
-                                    manual ? "bg-[#4ad463]" : "bg-[#a4e3b3] opacity-60 cursor-not-allowed"
+                                    manual && !motorBusy ? "bg-[#4ad463]" : "bg-[#a4e3b3] opacity-60 cursor-not-allowed"
                                 }`}
                                 onClick={() => manual && sendCommand("open")}
-                                disabled={!manual}
+                                disabled={!manual || motorBusy}
                             >
                                 Open
                             </button>
                             <button
                                 className={`rounded-2xl py-6 text-2xl font-semibold text-white shadow-[0_20px_45px_rgba(224,106,118,0.45)] transition ${
-                                    manual ? "bg-[#e06a76]" : "bg-[#f1b5bb] opacity-60 cursor-not-allowed"
+                                    manual && !motorBusy ? "bg-[#e06a76]" : "bg-[#f1b5bb] opacity-60 cursor-not-allowed"
                                 }`}
                                 onClick={() => manual && sendCommand("close")}
-                                disabled={!manual}
+                                disabled={!manual || motorBusy}
                             >
                                 Close
                             </button>
                         </div>
+                        {manual && motorBusy && (
+                            <p className={`text-sm font-medium ${isNight ? "text-slate-200" : "text-slate-700"}`}>
+                                Shades are {motorCurrentAction || "moving"}... manual buttons are disabled until complete.
+                            </p>
+                        )}
+                        {manual && !motorBusy && motorLastError && (
+                            <p className="text-sm font-medium text-red-500">{motorLastError}</p>
+                        )}
                     </div>
 
                     <div className={`flex items-center gap-2 text-lg font-medium ${isNight ? "text-slate-100" : "text-slate-600"}`}>
