@@ -77,14 +77,36 @@ export async function POST(req) {
   }
 
   try {
-    await motorController.sendCommand(action);
+    const result = await motorController.sendCommand(action);
+    if (result.code === "REDUNDANT_OPERATION") {
+      return Response.json(
+        { 
+          error: result.message,
+          code: "REDUNDANT_OPERATION",
+          allowed: false
+        },
+        { status: 200 } // Not really an error, just blocked
+      );
+    }
+    if (result.code === "BUSY") {
+      return Response.json(
+        { error: "Motor is busy", status: motorController.getSnapshot() },
+        { status: 409 }
+      );
+    }
+    if (result.code === "INVALID_ACTION") {
+      return Response.json(
+        { error: "Invalid action" },
+        { status: 400 }
+      );
+    }
+    if (result.code === "SERIAL_PORT_MISSING") {
+      return Response.json(
+        { error: "Hardware serial port is not configured" },
+        { status: 503 }
+      );
+    }
   } catch (err) {
-    if (err?.code === "BUSY") {
-      return Response.json({ error: "Motor is busy", status: motorController.getSnapshot() }, { status: 409 });
-    }
-    if (err?.code === "SERIAL_PORT_MISSING") {
-      return Response.json({ error: "Hardware serial port is not configured" }, { status: 503 });
-    }
     return Response.json({ error: err?.message || "Failed to dispatch motor command" }, { status: 500 });
   }
 

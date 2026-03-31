@@ -1,4 +1,7 @@
 import { EventEmitter } from "events";
+import { exec } from "child_process";
+import { join } from "path";
+import { shadeStateManager, SHADE_STATES } from "./shadeStateManager.js";
 
 const DEFAULT_BAUD_RATE = 115200;
 const DEFAULT_TIMEOUT_MS = 25000;
@@ -9,18 +12,17 @@ const STATES = {
   ERROR: "error",
 };
 
-class MotorController extends EventEmitter {
+class PythonMotorController extends EventEmitter {
   constructor() {
     super();
-    this.port = null;
-    this.connecting = null;
-    this.buffer = "";
     this.state = STATES.IDLE;
     this.currentAction = null;
     this.lastCompletedAction = null;
     this.lastError = null;
     this.commandStartedAt = null;
     this.commandTimeout = null;
+    this.pythonScript = join(process.cwd(), 'serial_sender.py');
+    console.log("Python motor controller initialized - using Python for serial communication");
   }
 
   getSnapshot() {
@@ -36,44 +38,14 @@ class MotorController extends EventEmitter {
   }
 
   async ensureConnected() {
-    if (this.port?.isOpen) return;
-    if (this.connecting) {
-      await this.connecting;
-      return;
-    }
-
     const path = process.env.SERIAL_PORT_PATH;
     if (!path) {
       const err = new Error("SERIAL_PORT_PATH is not configured");
       err.code = "SERIAL_PORT_MISSING";
       throw err;
     }
-
-    const baudRate = Number(process.env.SERIAL_BAUD_RATE || DEFAULT_BAUD_RATE);
-    this.connecting = (async () => {
-      const { SerialPort } = await import("serialport");
-      const port = new SerialPort({ path, baudRate, autoOpen: false });
-      await new Promise((resolve, reject) => {
-        port.open((openErr) => {
-          if (openErr) reject(openErr);
-          else resolve();
-        });
-      });
-      this.port = port;
-      this.buffer = "";
-
-      port.on("data", (chunk) => this.handleData(chunk));
-      port.on("error", (err) => this.handlePortError(err));
-      port.on("close", () => {
-        this.port = null;
-      });
-    })();
-
-    try {
-      await this.connecting;
-    } finally {
-      this.connecting = null;
-    }
+    console.log(`Ready to communicate with ESP32 on ${path} using Python`);
+    return;
   }
 
   setState(nextState, patch = {}) {
@@ -114,38 +86,6 @@ class MotorController extends EventEmitter {
     }, timeoutMs);
   }
 
-  handlePortError(err) {
-    this.clearCommandTimeout();
-    this.setState(STATES.ERROR, {
-      currentAction: null,
-      lastError: err?.message || "Serial port error",
-      commandStartedAt: null,
-    });
-    this.setState(STATES.IDLE, {});
-  }
-
-  handleData(chunk) {
-    this.buffer += chunk.toString("utf8");
-    const lines = this.buffer.split(/\r?\n/);
-    this.buffer = lines.pop() || "";
-
-    for (const rawLine of lines) {
-      const line = rawLine.trim();
-      if (!line) continue;
-
-      if (/^(OPEN|CLOSE)\s+complete$/i.test(line)) {
-        const action = line.toLowerCase().startsWith("open") ? "open" : "close";
-        this.clearCommandTimeout();
-        this.setState(STATES.IDLE, {
-          currentAction: null,
-          lastCompletedAction: action,
-          lastError: null,
-          commandStartedAt: null,
-        });
-      }
-    }
-  }
-
   async sendCommand(action) {
     const normalized = String(action || "").trim().toLowerCase();
     if (!["open", "close"].includes(normalized)) {
@@ -160,6 +100,14 @@ class MotorController extends EventEmitter {
       throw err;
     }
 
+    // Check if operation is allowed based on current state
+    const canPerform = await shadeStateManager.canPerformOperation(normalized);
+    if (!canPerform.canPerform) {
+      const err = new Error(canPerform.reason);
+      err.code = "REDUNDANT_OPERATION";
+      throw err;
+    }
+
     await this.ensureConnected();
 
     this.setState(STATES.BUSY, {
@@ -169,19 +117,56 @@ class MotorController extends EventEmitter {
     });
     this.setCommandTimeout();
 
-    const payload = `${normalized.toUpperCase()}\n`;
+    const path = process.env.SERIAL_PORT_PATH;
+    const baudRate = process.env.SERIAL_BAUD_RATE || DEFAULT_BAUD_RATE;
+    const command = normalized.toUpperCase();
+
     try {
+      // Use Python script for reliable serial communication
+      const pythonCmd = `python "${this.pythonScript}" "${path}" "${baudRate}" "${command}"`;
+      
       await new Promise((resolve, reject) => {
-        this.port.write(payload, (err) => {
-          if (err) reject(err);
-          else resolve();
+        exec(pythonCmd, { timeout: 20000 }, (error, stdout, stderr) => {
+          console.log(stdout);
+          if (stderr && stderr.includes('ERROR')) {
+            console.error('Python script error:', stderr);
+            reject(new Error(stderr));
+          } else {
+            // Success even if there's stdout output
+            resolve();
+          }
         });
       });
+
+      // Wait for motor movement (8 seconds for full rotation)
+      setTimeout(() => {
+        this.clearCommandTimeout();
+        
+        // Only update state if operation completed successfully
+        const newState = normalized === 'open' ? SHADE_STATES.OPEN : SHADE_STATES.CLOSED;
+        shadeStateManager.setState(newState).then(success => {
+          if (success) {
+            console.log(`✅ State updated to: ${newState}`);
+          } else {
+            console.log(`⚠️ Failed to update state to: ${newState}`);
+          }
+        });
+
+        this.setState(STATES.IDLE, {
+          currentAction: null,
+          lastCompletedAction: normalized,
+          lastError: null,
+          commandStartedAt: null,
+        });
+        console.log(`✅ Command completed: ${command}`);
+      }, 8000);
+      
     } catch (err) {
       this.clearCommandTimeout();
+      // Don't update state on failure
       this.setState(STATES.ERROR, {
         currentAction: null,
-        lastError: err?.message || "Failed to write command to motor",
+        lastError: err?.message || "Failed to send command to ESP32",
         commandStartedAt: null,
       });
       this.setState(STATES.IDLE, {});
@@ -190,12 +175,16 @@ class MotorController extends EventEmitter {
 
     return { accepted: true, action: normalized };
   }
+
+  async getCurrentShadeState() {
+    return await shadeStateManager.getCurrentState();
+  }
 }
 
 const globalKey = "__shadeSyncMotorController";
 
 if (!global[globalKey]) {
-  global[globalKey] = new MotorController();
+  global[globalKey] = new PythonMotorController();
 }
 
 export const motorController = global[globalKey];

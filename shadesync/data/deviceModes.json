@@ -10,5 +10,9 @@
   "7836fc15-cd6d-4318-98bf-9c5cc548b865": {
     "mode": "auto",
     "manual_expires_at": null
+  },
+  "af291cc2-470f-4aca-bdc9-5a0cc2536572": {
+    "mode": "manual",
+    "manual_expires_at": null
   }
 }

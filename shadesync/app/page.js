@@ -30,6 +30,7 @@ export default function Home() {
     const [motorBusy, setMotorBusy] = useState(false);
     const [motorCurrentAction, setMotorCurrentAction] = useState(null);
     const [motorLastError, setMotorLastError] = useState("");
+    const [shadeState, setShadeState] = useState("unknown"); // "open", "closed", "unknown"
     const { theme, loading: weatherLoading, error: weatherError, weatherData } = useWeatherTheme();
 
     const router = useRouter();
@@ -150,11 +151,41 @@ export default function Home() {
         }
     };
 
+    const fetchShadeState = useCallback(async () => {
+        try {
+            const res = await fetch("/api/shade-state");
+            if (res.ok) {
+                const data = await res.json();
+                setShadeState(data.state);
+            }
+        } catch (err) {
+            console.error("Failed to fetch shade state:", err);
+        }
+    }, []);
+
+    // Fetch shade state on component mount and periodically
+    useEffect(() => {
+        fetchShadeState();
+        const interval = setInterval(fetchShadeState, 30000); // Update every 30 seconds
+        return () => clearInterval(interval);
+    }, [fetchShadeState]);
+
     const sendCommand = async (action) => {
         if (motorBusy) {
             toast.info("Motor is already moving. Please wait.");
             return;
         }
+
+        // Check if operation is redundant
+        if (action === "open" && shadeState === "open") {
+            toast.warning("Shades are already open!");
+            return;
+        }
+        if (action === "close" && shadeState === "closed") {
+            toast.warning("Shades are already closed!");
+            return;
+        }
+
         try {
             setMotorBusy(true);
             setMotorCurrentAction(action);
@@ -163,15 +194,35 @@ export default function Home() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ action }),
             });
+
+            const data = await res.json();
+
             if (!res.ok) {
-                const body = await res.json().catch(() => ({}));
-                throw new Error(body.error || "Command failed");
+                if (data.code === "REDUNDANT_OPERATION") {
+                    toast.warning(data.error);
+                    return;
+                }
+                throw new Error(data.error || "Command failed");
             }
-            toast.success(`${action === "open" ? "Opening" : "Closing"} shades`);
+
+            if (data.code === "REDUNDANT_OPERATION") {
+                toast.warning(data.error);
+                return;
+            }
+
+            toast.success(`Shades ${action}ing...`);
+
+            // Update shade state after successful command
+            setTimeout(() => {
+                setShadeState(action);
+                fetchShadeState(); // Refresh from server
+            }, 8000); // Wait for motor to complete
+
         } catch (err) {
+            toast.error(err.message || "Failed to send command");
+        } finally {
             setMotorBusy(false);
             setMotorCurrentAction(null);
-            toast.error(err.message || "Command failed");
         }
     };
 
@@ -384,21 +435,35 @@ export default function Home() {
                         <div className="grid w-full grid-cols-1 gap-5 sm:grid-cols-2">
                             <button
                                 className={`rounded-2xl py-6 text-2xl font-semibold text-white shadow-[0_20px_45px_rgba(74,212,99,0.45)] transition ${
-                                    manual && !motorBusy ? "bg-[#4ad463]" : "bg-[#a4e3b3] opacity-60 cursor-not-allowed"
+                                    manual && !motorBusy && shadeState !== "open" 
+                                        ? "bg-[#4ad463] hover:bg-[#3bc254]" 
+                                        : "bg-[#a4e3b3] opacity-60 cursor-not-allowed"
                                 }`}
                                 onClick={() => manual && sendCommand("open")}
-                                disabled={!manual || motorBusy}
+                                disabled={!manual || motorBusy || shadeState === "open"}
                             >
-                                Open
+                                <div className="flex flex-col items-center gap-2">
+                                    <span>Open</span>
+                                    {shadeState === "open" && (
+                                        <span className="text-xs font-normal opacity-90">Already Open</span>
+                                    )}
+                                </div>
                             </button>
                             <button
                                 className={`rounded-2xl py-6 text-2xl font-semibold text-white shadow-[0_20px_45px_rgba(224,106,118,0.45)] transition ${
-                                    manual && !motorBusy ? "bg-[#e06a76]" : "bg-[#f1b5bb] opacity-60 cursor-not-allowed"
+                                    manual && !motorBusy && shadeState !== "closed" 
+                                        ? "bg-[#e06a76] hover:bg-[#d55863]" 
+                                        : "bg-[#f1b5bb] opacity-60 cursor-not-allowed"
                                 }`}
                                 onClick={() => manual && sendCommand("close")}
-                                disabled={!manual || motorBusy}
+                                disabled={!manual || motorBusy || shadeState === "closed"}
                             >
-                                Close
+                                <div className="flex flex-col items-center gap-2">
+                                    <span>Close</span>
+                                    {shadeState === "closed" && (
+                                        <span className="text-xs font-normal opacity-90">Already Closed</span>
+                                    )}
+                                </div>
                             </button>
                         </div>
                         {manual && motorBusy && (
