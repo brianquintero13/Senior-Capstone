@@ -20,10 +20,15 @@ export default function ResetPasswordPage() {
   const [mode, setMode] = useState("account");
 
   useEffect(() => {
+    // Check both URL hash and query parameters for recovery tokens
     const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
-    const accessToken = hashParams.get("access_token");
-    const refreshToken = hashParams.get("refresh_token");
-    const type = hashParams.get("type");
+    const urlParams = new URLSearchParams(window.location.search);
+    
+    const accessToken = hashParams.get("access_token") || urlParams.get("access_token");
+    const refreshToken = hashParams.get("refresh_token") || urlParams.get("refresh_token");
+    const type = hashParams.get("type") || urlParams.get("type");
+
+    console.log("Password reset params:", { accessToken: !!accessToken, refreshToken: !!refreshToken, type });
 
     if (type === "recovery" && accessToken && refreshToken) {
       setMode("recovery");
@@ -35,15 +40,20 @@ export default function ResetPasswordPage() {
             refresh_token: refreshToken,
           });
           if (error) {
+            console.error("Recovery session error:", error);
             setMsg("Recovery link is invalid or expired.");
             return;
           }
+          console.log("Recovery session established successfully");
           window.history.replaceState(null, "", "/reset-password");
-        } catch {
+        } catch (err) {
+          console.error("Recovery bootstrap error:", err);
           setMsg("Recovery link is invalid or expired.");
         }
       };
       bootstrapRecoverySession();
+    } else {
+      console.log("Not in recovery mode, showing regular reset form");
     }
   }, []);
 
@@ -113,6 +123,12 @@ export default function ResetPasswordPage() {
                 ? "Enter a new password for your account."
                 : "Enter your current password and choose a new one."}
             </p>
+            {/* Debug info - remove in production */}
+            {process.env.NODE_ENV === 'development' && (
+              <p className="mt-2 text-xs text-slate-400">
+                Debug: Mode = {mode}
+              </p>
+            )}
           </div>
 
           <form className="flex flex-col gap-6 text-left" onSubmit={onSubmit}>
