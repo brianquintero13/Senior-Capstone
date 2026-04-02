@@ -21,7 +21,27 @@ export async function POST(req) {
 
   const origin = process.env.NEXTAUTH_URL || req.nextUrl.origin;
   const redirectTo = `${origin}/reset-password`;
-  await supabase.auth.resetPasswordForEmail(email, { redirectTo });
-
-  return NextResponse.json({ ok: true }, { status: 200 });
+  
+  console.log("Sending password reset email to:", email);
+  console.log("Redirect URL:", redirectTo);
+  
+  try {
+    const { data, error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+    
+    if (error) {
+      console.error("Supabase password reset error:", error);
+      return NextResponse.json({ 
+        error: error.message || "Failed to send password reset email" 
+      }, { status: 400 });
+    }
+    
+    console.log("Password reset email sent successfully:", data);
+    return NextResponse.json({ ok: true, message: "Password reset email sent" }, { status: 200 });
+    
+  } catch (err) {
+    console.error("Password reset error:", err);
+    return NextResponse.json({ 
+      error: "Failed to send password reset email" 
+    }, { status: 500 });
+  }
 }
