@@ -1,4 +1,5 @@
 import { supabaseService } from "@/lib/supabaseService";
+import { saveUserSettings } from "@/lib/databaseSettingsStore";
 
 export async function POST(req) {
     try {
@@ -19,20 +20,20 @@ export async function POST(req) {
             return new Response(JSON.stringify({ error: error.message }), { status: 400 });
         }
 
-    // Temporarily skip user_settings for testing
-    // const userId = data.user.id;
-    // const { error: settingsError } = await supabaseService
-    //     .from("user_settings")
-    //     .upsert({ user_id: userId, profile_name: fullName });
+        // Create user settings in database
+        try {
+            const userId = data.user.id;
+            await saveUserSettings(userId, {
+                profile: { name: fullName },
+                system: { serialNumber: "", zipCode: "" }
+            });
+            console.log("User settings created in database for:", userId);
+        } catch (settingsError) {
+            console.error("Failed to create user settings:", settingsError);
+            // Don't fail signup if settings creation fails, but log it
+        }
 
-    // if (settingsError) {
-    //     return new Response(
-    //         JSON.stringify({ error: settingsError.message || "Failed to save settings" }),
-    //         { status: 400 },
-    //     );
-    // }
-
-    return new Response(JSON.stringify({ ok: true, userId: data.user.id }), { status: 200 });
+        return new Response(JSON.stringify({ ok: true, userId: data.user.id }), { status: 200 });
     } catch (err) {
         console.error("Signup error:", err);
         return new Response(JSON.stringify({ error: "Internal server error" }), { status: 500 });

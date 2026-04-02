@@ -123,5 +123,30 @@
       "serialNumber": "SS-TEST-XYZ",
       "zipCode": ""
     }
+  },
+  "stamosron79@gmail.com": {
+    "profile": {
+      "name": ""
+    },
+    "notifications": {
+      "deviceAlerts": false,
+      "scheduleNotifications": false,
+      "automationUpdates": false,
+      "systemAnnouncements": false
+    },
+    "automation": {
+      "openingPosition": 75,
+      "sunlightSensitivity": "Medium"
+    },
+    "appearance": {
+      "theme": "Light"
+    },
+    "meta": {
+      "lastPasswordResetAt": null
+    },
+    "system": {
+      "serialNumber": "DEMO123",
+      "zipCode": ""
+    }
   }
 }
