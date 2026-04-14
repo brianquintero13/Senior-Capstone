@@ -56,3 +56,41 @@ export const getWeatherVideo = (weatherData) => {
   // Default to sunny/day or night based on time
   return isDaytime ? '/videos/Sunny.mp4' : '/videos/night.mp4';
 };
+
+export const getWeatherForZip = async (zipCode) => {
+  const apiKey = process.env.OPEN_WEATHER_API_KEY;
+  if (!apiKey) {
+    throw new Error('OpenWeather API key not found');
+  }
+
+  try {
+    // First get coordinates from zip code
+    const geoResponse = await fetch(
+      `http://api.openweathermap.org/geo/1.0/zip?zip=${zipCode},US&appid=${apiKey}`
+    );
+    
+    if (!geoResponse.ok) {
+      throw new Error('Failed to get coordinates for zip code');
+    }
+    
+    const geoData = await geoResponse.json();
+    
+    if (!geoData.lat || !geoData.lon) {
+      throw new Error('Invalid coordinates returned');
+    }
+
+    // Then get weather using coordinates
+    const weatherResponse = await fetch(
+      `https://api.openweathermap.org/data/2.5/weather?lat=${geoData.lat}&lon=${geoData.lon}&appid=${apiKey}&units=metric`
+    );
+    
+    if (!weatherResponse.ok) {
+      throw new Error('Failed to get weather data');
+    }
+    
+    return await weatherResponse.json();
+  } catch (error) {
+    console.error('Error fetching weather for zip:', error);
+    throw error;
+  }
+};

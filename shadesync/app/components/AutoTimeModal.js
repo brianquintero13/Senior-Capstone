@@ -60,6 +60,20 @@ export default function AutoTimeModal({ open, onClose, onSaved }) {
     };
   }, [open]);
 
+  // Add escape key handler
+  useEffect(() => {
+    const handleEscape = (e) => {
+      if (e.key === 'Escape' && open) {
+        onClose();
+      }
+    };
+    
+    if (open) {
+      document.addEventListener('keydown', handleEscape);
+      return () => document.removeEventListener('keydown', handleEscape);
+    }
+  }, [open, onClose]);
+
   const handleTimeChange = (time) => {
     setTimeInput(time);
     commitCurrentValue(time);
@@ -148,10 +162,10 @@ export default function AutoTimeModal({ open, onClose, onSaved }) {
             </div>
             <button
               onClick={onClose}
-              className="flex h-10 w-10 items-center justify-center rounded-full text-2xl text-slate-700 transition hover:bg-slate-100"
-              aria-label="Close dialog"
+              className="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+              aria-label="Close modal"
             >
-              ×
+              ✕
             </button>
           </div>
           <div className="flex w-fit self-center items-center rounded-full border border-blue-200 bg-white/60 p-1 text-base font-medium text-slate-600 shadow-inner">

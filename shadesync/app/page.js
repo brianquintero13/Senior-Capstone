@@ -5,6 +5,8 @@ import Link from "next/link";
 import { Poppins } from "next/font/google";
 import AutoTimeModal from "./components/AutoTimeModal";
 import DisableScheduleModal from "./components/DisableScheduleModal";
+import AIInsights from "./components/AIInsights";
+import AIAssistant from "./components/AIAssistant";
 import { useSession, signOut } from "next-auth/react";
 import ClockWithTimezones from "./components/ClockWithTimezones";
 import { ToastContainer, toast } from "react-toastify";
@@ -23,7 +25,7 @@ export default function Home() {
     const [manual, setManual] = useState(false);
     const [autoModalOpen, setAutoModalOpen] = useState(false);
     const [disableModalOpen, setDisableModalOpen] = useState(false);
-    const [disableChoice, setDisableChoice] = useState("today");
+    const [disableChoice, setDisableChoice] = useState("");
     const [deviceError, setDeviceError] = useState("");
     const [scheduleEntries, setScheduleEntries] = useState({});
     const [scheduleFetchError, setScheduleFetchError] = useState("");
@@ -34,6 +36,13 @@ export default function Home() {
     const { theme, loading: weatherLoading, error: weatherError, weatherData } = useWeatherTheme();
 
     const router = useRouter();
+
+    // Emergency modal close function
+    const closeAllModals = () => {
+        setAutoModalOpen(false);
+        setDisableModalOpen(false);
+        setDisableChoice("");
+    };
     useEffect(() => {
         const controller = new AbortController();
         const checkDevice = async () => {
@@ -474,6 +483,9 @@ export default function Home() {
                         {manual && !motorBusy && motorLastError && (
                             <p className="text-sm font-medium text-red-500">{motorLastError}</p>
                         )}
+
+                        {/* AI Insights Section */}
+                        <AIInsights isNight={isNight} />
                     </div>
 
                     <div className={`flex items-center gap-2 text-lg font-medium ${isNight ? "text-slate-100" : "text-slate-600"}`}>
@@ -488,13 +500,18 @@ export default function Home() {
                 open={autoModalOpen}
                 onClose={() => setAutoModalOpen(false)}
                 onSaved={loadSchedule}
+                isNight={isNight}
             />
             <DisableScheduleModal
-                open={disableModalOpen}
+                isOpen={disableModalOpen}
                 onClose={() => setDisableModalOpen(false)}
-                onConfirm={(choice) => handleDisableSchedule(choice)}
-                initialChoice={disableChoice}
+                onDisable={handleDisableSchedule}
+                choice={disableChoice}
+                isNight={isNight}
             />
+
+            {/* AI Assistant */}
+            <AIAssistant isNight={isNight} />
         </div>
     );
 }
