@@ -1,9 +1,6 @@
 import { EventEmitter } from "events";
-import { exec } from "child_process";
-import { join } from "path";
 import { shadeStateManager, SHADE_STATES } from "./shadeStateManager.js";
 
-const DEFAULT_BAUD_RATE = 115200;
 const DEFAULT_TIMEOUT_MS = 25000;
 
 const STATES = {
@@ -12,7 +9,7 @@ const STATES = {
   ERROR: "error",
 };
 
-class PythonMotorController extends EventEmitter {
+class WiFiMotorController extends EventEmitter {
   constructor() {
     super();
     this.state = STATES.IDLE;
@@ -21,8 +18,8 @@ class PythonMotorController extends EventEmitter {
     this.lastError = null;
     this.commandStartedAt = null;
     this.commandTimeout = null;
-    this.pythonScript = join(process.cwd(), 'serial_sender.py');
-    console.log("Python motor controller initialized - using Python for serial communication");
+    this.esp32IP = process.env.ESP32_IP;
+    console.log("WiFi motor controller initialized - using HTTP requests to ESP32");
   }
 
   getSnapshot() {
@@ -38,13 +35,12 @@ class PythonMotorController extends EventEmitter {
   }
 
   async ensureConnected() {
-    const path = process.env.SERIAL_PORT_PATH;
-    if (!path) {
-      const err = new Error("SERIAL_PORT_PATH is not configured");
-      err.code = "SERIAL_PORT_MISSING";
+    if (!this.esp32IP) {
+      const err = new Error("ESP32_IP is not configured in environment variables");
+      err.code = "ESP32_IP_MISSING";
       throw err;
     }
-    console.log(`Ready to communicate with ESP32 on ${path} using Python`);
+    console.log(`Ready to communicate with ESP32 at ${this.esp32IP} via WiFi`);
     return;
   }
 
@@ -117,26 +113,31 @@ class PythonMotorController extends EventEmitter {
     });
     this.setCommandTimeout();
 
-    const path = process.env.SERIAL_PORT_PATH;
-    const baudRate = process.env.SERIAL_BAUD_RATE || DEFAULT_BAUD_RATE;
     const command = normalized.toUpperCase();
 
     try {
-      // Use Python script for reliable serial communication
-      const pythonCmd = `python "${this.pythonScript}" "${path}" "${baudRate}" "${command}"`;
+      // Use HTTP request to ESP32 via WiFi
+      const url = `http://${this.esp32IP}/${command}`;
+      console.log(`📡 Sending HTTP request to ESP32: ${url}`);
       
-      await new Promise((resolve, reject) => {
-        exec(pythonCmd, { timeout: 20000 }, (error, stdout, stderr) => {
-          console.log(stdout);
-          if (stderr && stderr.includes('ERROR')) {
-            console.error('Python script error:', stderr);
-            reject(new Error(stderr));
-          } else {
-            // Success even if there's stdout output
-            resolve();
-          }
-        });
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'text/plain',
+        },
+        signal: AbortSignal.timeout(10000) // 10 second timeout
       });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.text();
+      console.log(`📨 ESP32 response: ${result}`);
+
+      if (result.includes('BUSY')) {
+        throw new Error('ESP32 is busy');
+      }
 
       // Wait for motor movement (8 seconds for full rotation)
       setTimeout(() => {
@@ -184,7 +185,7 @@ class PythonMotorController extends EventEmitter {
 const globalKey = "__shadeSyncMotorController";
 
 if (!global[globalKey]) {
-  global[globalKey] = new PythonMotorController();
+  global[globalKey] = new WiFiMotorController();
 }
 
 export const motorController = global[globalKey];

@@ -16,8 +16,8 @@ const int OPEN_DIR = HIGH;
 const int CLOSE_DIR = LOW;
 
 // WiFi settings
-const char* ssid = "UoT_Guest";
-const char* password = "";
+const char* ssid = "Matt D.";
+const char* password = "Detrimental";
 
 WiFiServer server(80);
 
@@ -40,14 +40,23 @@ void rotateMotor(int direction) {
 void setup() {
   Serial.begin(115200);
   
+  // Add delay to allow Serial Monitor to connect
+  delay(2000);
+  
+  Serial.println("=================================");
+  Serial.println("ESP32 Starting Up...");
+  Serial.println("=================================");
+  
   // Motor pins
   pinMode(STEP_PIN, OUTPUT);
   pinMode(DIR_PIN, OUTPUT);
   pinMode(ENABLE_PIN, OUTPUT);
   digitalWrite(ENABLE_PIN, LOW); // Enable motor driver
+  
+  Serial.println("Motor pins configured");
 
   // WiFi setup
-  Serial.println("Connecting to iPhone hotspot...");
+  Serial.println("Connecting to hotspot...");
   Serial.print("SSID: ");
   Serial.println(ssid);
   
@@ -56,24 +65,50 @@ void setup() {
   WiFi.disconnect();
   delay(100);
   
-  WiFi.begin(ssid, password);
-  
+  // Try multiple connection attempts with different approaches
   int attempts = 0;
-  while (WiFi.status() != WL_CONNECTED && attempts < 30) {
-    delay(1000);
+  bool connected = false;
+  
+  while (!connected && attempts < 40) {
     Serial.print("Attempt ");
     Serial.print(attempts + 1);
-    Serial.print(" - Status: ");
-    Serial.println(WiFi.status());
-    attempts++;
+    Serial.print(" - ");
     
-    // iPhone hotspots sometimes need extra time
-    if (attempts == 10) {
-      Serial.println("iPhone hotspot taking longer, retrying...");
-      WiFi.disconnect();
-      delay(2000);
-      WiFi.begin(ssid, password);
+    WiFi.begin(ssid, password);
+    
+    // Wait for connection with timeout
+    int connectionAttempts = 0;
+    while (WiFi.status() != WL_CONNECTED && connectionAttempts < 20) {
+      delay(500);
+      connectionAttempts++;
+      
+      if (WiFi.status() == WL_CONNECTED) {
+        connected = true;
+        break;
+      }
     }
+    
+    if (connected) {
+      break;
+    }
+    
+    Serial.print("Status: ");
+    Serial.println(WiFi.status());
+    
+    // Reset and try different approach
+    WiFi.disconnect();
+    delay(1000);
+    
+    // Every 10 attempts, try with WiFi power cycle
+    if (attempts % 10 == 9) {
+      Serial.println("Power cycling WiFi...");
+      WiFi.mode(WIFI_OFF);
+      delay(1000);
+      WiFi.mode(WIFI_STA);
+      delay(500);
+    }
+    
+    attempts++;
   }
   
   if (WiFi.status() == WL_CONNECTED) {
@@ -83,6 +118,7 @@ void setup() {
     
     server.begin();
     Serial.println("Server started");
+    Serial.println("=================================");
   } else {
     Serial.println("Failed to connect to iPhone hotspot!");
     Serial.print("Final status: ");
