@@ -2,6 +2,7 @@ import { EventEmitter } from "events";
 import { shadeStateManager, SHADE_STATES } from "./shadeStateManager.js";
 
 const DEFAULT_TIMEOUT_MS = 25000;
+const DEFAULT_ESP32_HTTP_TIMEOUT_MS = 20000;
 
 const STATES = {
   IDLE: "idle",
@@ -20,6 +21,16 @@ class WiFiMotorController extends EventEmitter {
     this.commandTimeout = null;
     this.esp32IP = process.env.ESP32_IP;
     console.log("WiFi motor controller initialized - using HTTP requests to ESP32");
+    this.initializeState();
+  }
+
+  async initializeState() {
+    try {
+      await shadeStateManager.setState(SHADE_STATES.CLOSED);
+      console.log("🔄 Startup state reset: shades marked as CLOSED");
+    } catch (err) {
+      console.log(`⚠️ Failed to reset startup shade state: ${err?.message || String(err)}`);
+    }
   }
 
   getSnapshot() {
@@ -120,12 +131,17 @@ class WiFiMotorController extends EventEmitter {
       const url = `http://${this.esp32IP}/${command}`;
       console.log(`📡 Sending HTTP request to ESP32: ${url}`);
       
+      const httpTimeoutMs = Number(
+        process.env.ESP32_HTTP_TIMEOUT_MS || process.env.MOTOR_COMMAND_TIMEOUT_MS || DEFAULT_ESP32_HTTP_TIMEOUT_MS
+      );
+
       const response = await fetch(url, {
         method: 'GET',
         headers: {
           'Content-Type': 'text/plain',
         },
-        signal: AbortSignal.timeout(10000) // 10 second timeout
+        // ESP32 response can be delayed while motor movement completes.
+        signal: AbortSignal.timeout(httpTimeoutMs)
       });
 
       if (!response.ok) {
@@ -139,28 +155,24 @@ class WiFiMotorController extends EventEmitter {
         throw new Error('ESP32 is busy');
       }
 
-      // Wait for motor movement (8 seconds for full rotation)
-      setTimeout(() => {
-        this.clearCommandTimeout();
-        
-        // Only update state if operation completed successfully
-        const newState = normalized === 'open' ? SHADE_STATES.OPEN : SHADE_STATES.CLOSED;
-        shadeStateManager.setState(newState).then(success => {
-          if (success) {
-            console.log(`✅ State updated to: ${newState}`);
-          } else {
-            console.log(`⚠️ Failed to update state to: ${newState}`);
-          }
-        });
+      // WiFi firmware returns response after movement finishes, so update state immediately.
+      this.clearCommandTimeout();
 
-        this.setState(STATES.IDLE, {
-          currentAction: null,
-          lastCompletedAction: normalized,
-          lastError: null,
-          commandStartedAt: null,
-        });
-        console.log(`✅ Command completed: ${command}`);
-      }, 8000);
+      const newState = normalized === 'open' ? SHADE_STATES.OPEN : SHADE_STATES.CLOSED;
+      const updated = await shadeStateManager.setState(newState);
+      if (updated) {
+        console.log(`✅ State updated to: ${newState}`);
+      } else {
+        console.log(`⚠️ Failed to update state to: ${newState}`);
+      }
+
+      this.setState(STATES.IDLE, {
+        currentAction: null,
+        lastCompletedAction: normalized,
+        lastError: null,
+        commandStartedAt: null,
+      });
+      console.log(`✅ Command completed: ${command}`);
       
     } catch (err) {
       this.clearCommandTimeout();

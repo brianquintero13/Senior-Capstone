@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { motorController } from "@/lib/motorController";
+import { ensureScheduleDaemonStarted, maybeRunScheduleTick } from "@/lib/scheduleRunner";
 
 export const runtime = "nodejs";
 
@@ -13,6 +14,11 @@ export async function GET(req) {
   if (!session) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  ensureScheduleDaemonStarted();
+  maybeRunScheduleTick({ trigger: "device-status-connect" }).catch((err) => {
+    console.error(`[scheduler] ERROR initial tick failed: ${err?.message || String(err)}`);
+  });
 
   const encoder = new TextEncoder();
   let unsubscribe = null;
@@ -33,6 +39,9 @@ export async function GET(req) {
 
       heartbeat = setInterval(() => {
         controller.enqueue(encoder.encode(": ping\n\n"));
+        maybeRunScheduleTick({ trigger: "device-status-heartbeat" }).catch((err) => {
+          console.error(`[scheduler] ERROR heartbeat tick failed: ${err?.message || String(err)}`);
+        });
       }, 15000);
     },
     cancel() {

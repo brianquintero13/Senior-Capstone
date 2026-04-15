@@ -1,10 +1,9 @@
 'use client'
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Poppins } from "next/font/google";
 import AutoTimeModal from "./components/AutoTimeModal";
-import DisableScheduleModal from "./components/DisableScheduleModal";
 import AIInsights from "./components/AIInsights";
 import AIAssistant from "./components/AIAssistant";
 import { useSession, signOut } from "next-auth/react";
@@ -24,25 +23,23 @@ export default function Home() {
     const [open, setOpen] = useState(true);
     const [manual, setManual] = useState(false);
     const [autoModalOpen, setAutoModalOpen] = useState(false);
-    const [disableModalOpen, setDisableModalOpen] = useState(false);
-    const [disableChoice, setDisableChoice] = useState("");
     const [deviceError, setDeviceError] = useState("");
     const [scheduleEntries, setScheduleEntries] = useState({});
+    const [scheduleEnabled, setScheduleEnabled] = useState(true);
     const [scheduleFetchError, setScheduleFetchError] = useState("");
     const [motorBusy, setMotorBusy] = useState(false);
     const [motorCurrentAction, setMotorCurrentAction] = useState(null);
     const [motorLastError, setMotorLastError] = useState("");
     const [shadeState, setShadeState] = useState("unknown"); // "open", "closed", "unknown"
+    const [lockedShadeState, setLockedShadeState] = useState(null); // optimistic lock: "open" | "closed" | null
+    const statusInitializedRef = useRef(false);
+    const lastCompletedActionRef = useRef(null);
+    const previousBusyRef = useRef(false);
     const { theme, loading: weatherLoading, error: weatherError, weatherData } = useWeatherTheme();
+    const effectiveShadeState = lockedShadeState || shadeState;
 
     const router = useRouter();
 
-    // Emergency modal close function
-    const closeAllModals = () => {
-        setAutoModalOpen(false);
-        setDisableModalOpen(false);
-        setDisableChoice("");
-    };
     useEffect(() => {
         const controller = new AbortController();
         const checkDevice = async () => {
@@ -75,6 +72,7 @@ export default function Home() {
             }
             const data = await res.json();
             setScheduleEntries(data?.entries || {});
+            setScheduleEnabled(data?.schedule?.enabled !== false);
             setScheduleFetchError("");
         } catch (err) {
             setScheduleFetchError(err.message || "Failed to load schedule");
@@ -86,14 +84,75 @@ export default function Home() {
     }, [loadSchedule]);
 
     useEffect(() => {
+        if (!session?.user) return;
+        let cancelled = false;
+        const loadMode = async () => {
+            try {
+                const res = await fetch("/api/device-mode", { cache: "no-store" });
+                if (!res.ok) return;
+                const data = await res.json().catch(() => ({}));
+                if (!cancelled) {
+                    setManual(data?.mode === "manual");
+                }
+            } catch {
+                // Keep existing local mode if fetch fails.
+            }
+        };
+        loadMode();
+        return () => {
+            cancelled = true;
+        };
+    }, [session?.user]);
+
+    const fetchShadeState = useCallback(async () => {
+        try {
+            const res = await fetch("/api/shade-state");
+            if (res.ok) {
+                const data = await res.json();
+                setShadeState(data.state);
+            }
+        } catch (err) {
+            console.error("Failed to fetch shade state:", err);
+        }
+    }, []);
+
+    useEffect(() => {
         if (!session?.user) return undefined;
         const stream = new EventSource("/api/device-status");
         stream.addEventListener("status", (event) => {
             try {
                 const payload = JSON.parse(event.data || "{}");
-                setMotorBusy(Boolean(payload?.busy));
+                const isBusy = Boolean(payload?.busy);
+                const wasBusy = previousBusyRef.current;
+                previousBusyRef.current = isBusy;
+                setMotorBusy(isBusy);
                 setMotorCurrentAction(payload?.currentAction || null);
                 setMotorLastError(payload?.lastError || "");
+
+                // First status snapshot may contain stale lastCompletedAction from a prior session.
+                // Initialize refs without forcing UI shade state from that snapshot.
+                if (!statusInitializedRef.current) {
+                    statusInitializedRef.current = true;
+                    lastCompletedActionRef.current = payload?.lastCompletedAction || null;
+                    if (!isBusy) {
+                        fetchShadeState();
+                    }
+                    return;
+                }
+
+                if (payload?.lastCompletedAction && payload.lastCompletedAction !== lastCompletedActionRef.current) {
+                    lastCompletedActionRef.current = payload.lastCompletedAction;
+                    if (payload.lastCompletedAction === "open") {
+                        setShadeState("open");
+                    } else if (payload.lastCompletedAction === "close") {
+                        setShadeState("closed");
+                    }
+                }
+
+                // Always re-sync authoritative shade state when movement transitions to idle.
+                if (wasBusy && !isBusy) {
+                    fetchShadeState();
+                }
             } catch {
                 // Ignore malformed events.
             }
@@ -102,41 +161,24 @@ export default function Home() {
             // Let EventSource auto-reconnect; surface stale-state warning only if needed later.
         };
         return () => stream.close();
-    }, [session?.user]);
+    }, [session?.user, fetchShadeState]);
 
-    const handleDisableSchedule = async (choice) => {
-        setDisableChoice(choice);
-        const scope = choice === "entire" ? "all" : "today";
+    const handleToggleSchedule = async () => {
+        const nextEnabled = !scheduleEnabled;
         try {
             const res = await fetch("/api/schedules", {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ scope }),
+                body: JSON.stringify({ scope: nextEnabled ? "enable" : "all" }),
             });
             if (!res.ok) {
                 const body = await res.json().catch(() => ({}));
                 throw new Error(body.error || "Failed to update schedule");
             }
-            toast.success(scope === "all" ? "Schedule disabled" : "Schedule skipped for today");
+            setScheduleEnabled(nextEnabled);
+            toast.success(nextEnabled ? "Schedule enabled" : "Schedule disabled");
         } catch (err) {
             toast.error(err.message || "Failed to update schedule");
-        }
-    };
-
-    const handleEnableSchedule = async () => {
-        try {
-            const res = await fetch("/api/schedules", {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ scope: "enable" }),
-            });
-            if (!res.ok) {
-                const body = await res.json().catch(() => ({}));
-                throw new Error(body.error || "Failed to enable schedule");
-            }
-            toast.success("Schedule enabled");
-        } catch (err) {
-            toast.error(err.message || "Failed to enable schedule");
         }
     };
 
@@ -153,24 +195,13 @@ export default function Home() {
                 const body = await res.json().catch(() => ({}));
                 throw new Error(body.error || "Failed to update mode");
             }
+            fetchShadeState();
             toast.success(nextMode === "manual" ? "Manual mode enabled" : "Manual mode disabled");
         } catch (err) {
             setManual(manual); // revert
             toast.error(err.message || "Failed to update mode");
         }
     };
-
-    const fetchShadeState = useCallback(async () => {
-        try {
-            const res = await fetch("/api/shade-state");
-            if (res.ok) {
-                const data = await res.json();
-                setShadeState(data.state);
-            }
-        } catch (err) {
-            console.error("Failed to fetch shade state:", err);
-        }
-    }, []);
 
     // Fetch shade state on component mount and periodically
     useEffect(() => {
@@ -180,24 +211,30 @@ export default function Home() {
     }, [fetchShadeState]);
 
     const sendCommand = async (action) => {
+        const targetState = action === "open" ? "open" : "closed";
+        const previousLockedState = lockedShadeState;
+
         if (motorBusy) {
             toast.info("Motor is already moving. Please wait.");
             return;
         }
 
         // Check if operation is redundant
-        if (action === "open" && shadeState === "open") {
+        if (action === "open" && effectiveShadeState === "open") {
             toast.warning("Shades are already open!");
             return;
         }
-        if (action === "close" && shadeState === "closed") {
+        if (action === "close" && effectiveShadeState === "closed") {
             toast.warning("Shades are already closed!");
             return;
         }
 
+        let deferResetUntilMotionEnds = false;
         try {
+            setLockedShadeState(targetState);
             setMotorBusy(true);
             setMotorCurrentAction(action);
+            toast.info(`Sending ${action} command...`, { autoClose: 1200 });
             const res = await fetch("/api/device-command", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -218,20 +255,25 @@ export default function Home() {
                 toast.warning(data.error);
                 return;
             }
+            setShadeState(targetState);
+            deferResetUntilMotionEnds = true;
 
-            toast.success(`Shades ${action}ing...`);
-
-            // Update shade state after successful command
+            // Keep controls locked while motor is physically moving.
             setTimeout(() => {
-                setShadeState(action);
-                fetchShadeState(); // Refresh from server
+                setLockedShadeState(null);
+                setMotorBusy(false);
+                setMotorCurrentAction(null);
+                fetchShadeState(); // Refresh from server once movement should be done
             }, 8000); // Wait for motor to complete
 
         } catch (err) {
+            setLockedShadeState(previousLockedState);
             toast.error(err.message || "Failed to send command");
         } finally {
-            setMotorBusy(false);
-            setMotorCurrentAction(null);
+            if (!deferResetUntilMotionEnds) {
+                setMotorBusy(false);
+                setMotorCurrentAction(null);
+            }
         }
     };
 
@@ -380,20 +422,10 @@ export default function Home() {
                                         ? "border-white/30 bg-white/10 text-white hover:bg-white/20"
                                         : "border-blue-200 bg-white/70 text-slate-700"
                                 }`}
-                                onClick={() => setDisableModalOpen(true)}
-                            >
-                                Disable Schedule
-                            </button>
-                            <button
-                                className={`flex flex-1 items-center justify-center rounded-full border px-6 py-3 text-lg font-medium shadow hover:bg-white ${
-                                    isNight
-                                        ? "border-white/30 bg-white/10 text-white hover:bg-white/20"
-                                        : "border-blue-200 bg-white/70 text-slate-700"
-                                }`}
-                                onClick={handleEnableSchedule}
+                                onClick={handleToggleSchedule}
                                 type="button"
                             >
-                                Enable Schedule
+                                {scheduleEnabled ? "Disable Schedule" : "Enable Schedule"}
                             </button>
 
                         </div>
@@ -444,32 +476,32 @@ export default function Home() {
                         <div className="grid w-full grid-cols-1 gap-5 sm:grid-cols-2">
                             <button
                                 className={`rounded-2xl py-6 text-2xl font-semibold text-white shadow-[0_20px_45px_rgba(74,212,99,0.45)] transition ${
-                                    manual && !motorBusy && shadeState !== "open" 
+                                    manual && !motorBusy && effectiveShadeState !== "open" 
                                         ? "bg-[#4ad463] hover:bg-[#3bc254]" 
                                         : "bg-[#a4e3b3] opacity-60 cursor-not-allowed"
                                 }`}
                                 onClick={() => manual && sendCommand("open")}
-                                disabled={!manual || motorBusy || shadeState === "open"}
+                                disabled={!manual || motorBusy || effectiveShadeState === "open"}
                             >
                                 <div className="flex flex-col items-center gap-2">
                                     <span>Open</span>
-                                    {shadeState === "open" && (
+                                    {effectiveShadeState === "open" && (
                                         <span className="text-xs font-normal opacity-90">Already Open</span>
                                     )}
                                 </div>
                             </button>
                             <button
                                 className={`rounded-2xl py-6 text-2xl font-semibold text-white shadow-[0_20px_45px_rgba(224,106,118,0.45)] transition ${
-                                    manual && !motorBusy && shadeState !== "closed" 
+                                    manual && !motorBusy && effectiveShadeState !== "closed" 
                                         ? "bg-[#e06a76] hover:bg-[#d55863]" 
                                         : "bg-[#f1b5bb] opacity-60 cursor-not-allowed"
                                 }`}
                                 onClick={() => manual && sendCommand("close")}
-                                disabled={!manual || motorBusy || shadeState === "closed"}
+                                disabled={!manual || motorBusy || effectiveShadeState === "closed"}
                             >
                                 <div className="flex flex-col items-center gap-2">
                                     <span>Close</span>
-                                    {shadeState === "closed" && (
+                                    {effectiveShadeState === "closed" && (
                                         <span className="text-xs font-normal opacity-90">Already Closed</span>
                                     )}
                                 </div>
@@ -502,14 +534,6 @@ export default function Home() {
                 onSaved={loadSchedule}
                 isNight={isNight}
             />
-            <DisableScheduleModal
-                isOpen={disableModalOpen}
-                onClose={() => setDisableModalOpen(false)}
-                onDisable={handleDisableSchedule}
-                choice={disableChoice}
-                isNight={isNight}
-            />
-
             {/* AI Assistant */}
             <AIAssistant isNight={isNight} />
         </div>

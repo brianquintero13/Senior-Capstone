@@ -16,8 +16,8 @@ const int OPEN_DIR = HIGH;
 const int CLOSE_DIR = LOW;
 
 // WiFi settings
-const char* ssid = "Matt D.";
-const char* password = "Detrimental";
+const char* ssid = "Jake's iPhone (4)";
+const char* password = "19180317Rss";
 
 WiFiServer server(80);
 

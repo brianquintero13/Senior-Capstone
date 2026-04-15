@@ -7,6 +7,7 @@ import { motorController } from "@/lib/motorController";
 export const runtime = "nodejs";
 
 const ALLOWED_ACTIONS = ["open", "close"];
+const DEFAULT_MANUAL_OVERRIDE_MINUTES = 45;
 
 export async function POST(req) {
   const session = await getServerSession(authOptions);
@@ -71,9 +72,33 @@ export async function POST(req) {
   if (hasExpired) {
     saveDeviceMode(device.id, "auto", null);
   }
+  const manualOverrideActive = effectiveMode === "manual" && Boolean(expiresAt) && !hasExpired;
 
-  if (effectiveMode === "manual" && source === "schedule") {
+  if (manualOverrideActive && source === "schedule") {
     return Response.json({ error: "Device is in manual mode; schedule commands are blocked" }, { status: 409 });
+  }
+
+  if (source === "manual" && effectiveMode === "manual") {
+    const overrideMinutes = Number(process.env.MANUAL_OVERRIDE_MINUTES || DEFAULT_MANUAL_OVERRIDE_MINUTES);
+    const overrideExpiresAt = new Date(Date.now() + Math.max(1, overrideMinutes) * 60 * 1000).toISOString();
+
+    const { error: overrideErr } = await supabaseService
+      .from("devices")
+      .update({ mode: "manual", manual_expires_at: overrideExpiresAt })
+      .eq("id", device.id);
+
+    if (overrideErr) {
+      const errMsg = overrideErr.message?.toLowerCase() || "";
+      const schemaMissing =
+        errMsg.includes("'mode' column") ||
+        errMsg.includes("manual_expires_at") ||
+        errMsg.includes("within group is required for ordered-set aggregate mode");
+      if (!schemaMissing) {
+        return Response.json({ error: overrideErr.message }, { status: 400 });
+      }
+    }
+
+    saveDeviceMode(device.id, "manual", overrideExpiresAt);
   }
 
   try {
@@ -131,8 +156,15 @@ export async function POST(req) {
       user_id: session.user.id,
       command: action,
       status: "sent",
-      metadata: { source, modeAtCommand: effectiveMode },
+      metadata: { source, modeAtCommand: effectiveMode, manualOverrideActive },
     });
 
-  return Response.json({ ok: true, action, mode: effectiveMode, source, motor: motorController.getSnapshot() });
+  return Response.json({
+    ok: true,
+    action,
+    mode: effectiveMode,
+    source,
+    manualOverrideActive,
+    motor: motorController.getSnapshot(),
+  });
 }
