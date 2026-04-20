@@ -24,7 +24,7 @@
     "manual_expires_at": null
   },
   "1b5f3867-1397-451e-8208-96af97620c20": {
-    "mode": "manual",
+    "mode": "auto",
     "manual_expires_at": null
   }
 }

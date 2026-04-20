@@ -12,7 +12,19 @@ const defaultSchedule = {
   Su: { open: "", close: "" },
 };
 
-export default function AutoTimeModal({ open, onClose, onSaved }) {
+const DAY_LABELS = {
+  M: "Monday",
+  T: "Tuesday",
+  W: "Wednesday",
+  Th: "Thursday",
+  F: "Friday",
+  Sa: "Saturday",
+  Su: "Sunday",
+};
+
+const normalizeTime = (value) => String(value || "").slice(0, 5);
+
+export default function AutoTimeModal({ open, onClose, onSaved, initialEntries = {}, scheduleLoading = false }) {
   if (!open) return null;
   const [openShades, setOpenShades] = useState(true);
   const [selectedDay, setSelectedDay] = useState("M");
@@ -20,45 +32,35 @@ export default function AutoTimeModal({ open, onClose, onSaved }) {
   const [timeInput, setTimeInput] = useState(defaultSchedule.M.open);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
 
   const commitCurrentValue = (value = timeInput, day = selectedDay, isOpen = openShades) => {
     if (!day) return;
+    const normalizedValue = normalizeTime(value);
     setSchedule((prev) => ({
       ...prev,
       [day]: {
         ...prev[day],
-        ...(value ? { [isOpen ? "open" : "close"]: value } : { [isOpen ? "open" : "close"]: "" }),
+        ...(normalizedValue ? { [isOpen ? "open" : "close"]: normalizedValue } : { [isOpen ? "open" : "close"]: "" }),
       },
     }));
   };
 
   useEffect(() => {
     if (!open) return;
-    let active = true;
-    const load = async () => {
-      setLoading(true);
-      setError("");
-      try {
-        const res = await fetch("/api/schedules", { cache: "no-store" });
-        if (!res.ok) throw new Error("Failed to load schedule");
-        const body = await res.json();
-        const entries = body?.entries || {};
-        if (!active) return;
-        const merged = { ...defaultSchedule, ...entries };
-        setSchedule(merged);
-        setTimeInput(merged[selectedDay]?.[openShades ? "open" : "close"] || "");
-      } catch (e) {
-        if (active) setError(e.message || "Failed to load schedule");
-      } finally {
-        if (active) setLoading(false);
-      }
-    };
-    load();
-    return () => {
-      active = false;
-    };
-  }, [open]);
+    setError("");
+    const normalizedEntries = Object.fromEntries(
+      Object.entries(initialEntries || {}).map(([day, times]) => [
+        day,
+        {
+          open: normalizeTime(times?.open),
+          close: normalizeTime(times?.close),
+        },
+      ])
+    );
+    const merged = { ...defaultSchedule, ...normalizedEntries };
+    setSchedule(merged);
+    setTimeInput(merged[selectedDay]?.[openShades ? "open" : "close"] || "");
+  }, [open, initialEntries]);
 
   // Add escape key handler
   useEffect(() => {
@@ -99,10 +101,28 @@ export default function AutoTimeModal({ open, onClose, onSaved }) {
         ...schedule,
         [selectedDay]: {
           ...schedule[selectedDay],
-          ...(timeInput ? { [openShades ? "open" : "close"]: timeInput } : { [openShades ? "open" : "close"]: "" }),
+          ...(timeInput
+            ? { [openShades ? "open" : "close"]: normalizeTime(timeInput) }
+            : { [openShades ? "open" : "close"]: "" }),
         },
       };
       setSchedule(updatedSchedule);
+
+      const conflictingDay = Object.entries(updatedSchedule).find(
+        ([, times]) => {
+          const openTime = normalizeTime(times?.open);
+          const closeTime = normalizeTime(times?.close);
+          return openTime && closeTime && openTime === closeTime;
+        }
+      );
+      if (conflictingDay) {
+        const [dayAbbr] = conflictingDay;
+        const message = `${DAY_LABELS[dayAbbr] || "That day"} open and close times cannot be the same.`;
+        setError(message);
+        toast.error(message);
+        return;
+      }
+
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
       const res = await fetch("/api/schedules", {
         method: "POST",
@@ -114,7 +134,7 @@ export default function AutoTimeModal({ open, onClose, onSaved }) {
         throw new Error(body.error || "Failed to save schedule");
       }
       toast.success("Schedule saved");
-      onSaved?.();
+      onSaved?.(updatedSchedule);
       onClose();
     } catch (err) {
       setError(err.message || "Failed to save schedule");
@@ -171,15 +191,17 @@ export default function AutoTimeModal({ open, onClose, onSaved }) {
           <div className="flex w-fit self-center items-center rounded-full border border-blue-200 bg-white/60 p-1 text-base font-medium text-slate-600 shadow-inner">
             <button
               onClick={() => handleToggleShades(true)}
-              className={`cursor-pointer rounded-full px-6 py-2 transition-all ease-in-out duration-300
-                  ${openShades ? "bg-white text-slate-900 shadow-sm" : ""}`}
+              className={`cursor-pointer rounded-full border px-6 py-2 transition-all duration-300 ease-in-out
+                  ${openShades ? "border-slate-200 bg-white text-slate-900 shadow-sm ring-1 ring-slate-100" : "border-transparent"}`}
             >
               Open
             </button>
             <button
               onClick={() => handleToggleShades(false)}
-              className={`cursor-pointer rounded-full px-6 py-2  transition-all ease-in-out duration-300 ${
-                !openShades ? "bg-white text-slate-900 shadown-sm" : ""
+              className={`cursor-pointer rounded-full border px-6 py-2 transition-all duration-300 ease-in-out ${
+                !openShades
+                  ? "border-slate-200 bg-white text-slate-900 shadow-sm ring-1 ring-slate-100"
+                  : "border-transparent"
               }`}
             >
               Close
@@ -191,7 +213,7 @@ export default function AutoTimeModal({ open, onClose, onSaved }) {
             <input
               type="time"
               value={timeInput || ""}
-              onChange={(e) => setTimeInput(e.target.value)}
+              onChange={(e) => handleTimeChange(e.target.value)}
               className="h-14 w-[190px] rounded-xl border border-blue-100 bg-white/90 px-4 text-lg font-semibold text-slate-800 shadow-inner outline-none focus:border-[#5c8efa]"
             />
           </div>
@@ -235,14 +257,16 @@ export default function AutoTimeModal({ open, onClose, onSaved }) {
             </button>
             <button
       onClick={handleSaveSchedule}
-      disabled={saving}
+      disabled={saving || scheduleLoading}
       className="rounded-full border-2 border-[#4ad463] bg-white px-6 py-3 text-base font-semibold text-slate-800 transition hover:bg-[#f3fff7] disabled:opacity-60"
     >
-      {saving ? "Saving..." : loading ? "Loading..." : "Save Schedule"}
+      {saving ? "Saving..." : scheduleLoading ? "Loading..." : "Save Schedule"}
     </button>
   </div>
   {error && (
-    <p className="text-sm text-red-600 text-center">{error}</p>
+    <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-center text-sm text-amber-800">
+      {error}
+    </p>
   )}
         </div>
       </div>

@@ -27,6 +27,7 @@ export default function Home() {
     const [scheduleEntries, setScheduleEntries] = useState({});
     const [scheduleEnabled, setScheduleEnabled] = useState(true);
     const [scheduleFetchError, setScheduleFetchError] = useState("");
+    const [scheduleLoaded, setScheduleLoaded] = useState(false);
     const [motorBusy, setMotorBusy] = useState(false);
     const [motorCurrentAction, setMotorCurrentAction] = useState(null);
     const [motorLastError, setMotorLastError] = useState("");
@@ -35,6 +36,8 @@ export default function Home() {
     const statusInitializedRef = useRef(false);
     const lastCompletedActionRef = useRef(null);
     const previousBusyRef = useRef(false);
+    const seenSchedulerEventSeqRef = useRef(0);
+    const seenSchedulerEventAtRef = useRef(0);
     const { theme, loading: weatherLoading, error: weatherError, weatherData } = useWeatherTheme();
     const effectiveShadeState = lockedShadeState || shadeState;
 
@@ -76,6 +79,8 @@ export default function Home() {
             setScheduleFetchError("");
         } catch (err) {
             setScheduleFetchError(err.message || "Failed to load schedule");
+        } finally {
+            setScheduleLoaded(true);
         }
     }, []);
 
@@ -155,6 +160,38 @@ export default function Home() {
                 }
             } catch {
                 // Ignore malformed events.
+            }
+        });
+        stream.addEventListener("scheduler", (event) => {
+            try {
+                const payload = JSON.parse(event.data || "{}");
+                const seq = Number(payload?.seq) || 0;
+                const atMs = payload?.at ? new Date(payload.at).getTime() : Date.now();
+                if (
+                    seq &&
+                    seq <= seenSchedulerEventSeqRef.current &&
+                    atMs <= seenSchedulerEventAtRef.current
+                ) {
+                    return;
+                }
+                if (seq) {
+                    seenSchedulerEventSeqRef.current = seq;
+                }
+                if (Number.isFinite(atMs)) {
+                    seenSchedulerEventAtRef.current = atMs;
+                }
+
+                const actionLabel = payload?.action === "close" ? "Close" : "Open";
+                if (payload?.outcome === "execute") {
+                    toast.success(`Schedule executed: ${actionLabel}`);
+                    return;
+                }
+                if (payload?.outcome === "skip") {
+                    const reason = payload?.reason ? ` (${payload.reason})` : "";
+                    toast.info(`Schedule skipped: ${actionLabel}${reason}`);
+                }
+            } catch {
+                // Ignore malformed scheduler events.
             }
         });
         stream.onerror = () => {
@@ -287,7 +324,8 @@ export default function Home() {
         const hour12 = ((hourNum + 11) % 12) + 1;
         return `${hour12}:${minute}${ampm}`;
     };
-    const todayTime = scheduleEntries?.[todayKey]?.[open ? "open" : "close"];
+    const todayOpenTime = scheduleEntries?.[todayKey]?.open;
+    const todayCloseTime = scheduleEntries?.[todayKey]?.close;
 
     const isNight = theme.name?.startsWith("night");
     const backgroundStyle = theme?.backgroundImage
@@ -370,30 +408,32 @@ export default function Home() {
                         {/* LIVE CLOCK */}
                         <ClockWithTimezones isNight={isNight} />
 
-                        <div className="flex rounded-full border border-blue-200 bg-white/60 p-1 text-base font-medium text-slate-600 shadow-inner">
+                        {/* <div className="flex rounded-full border border-blue-200 bg-white/60 p-1 text-base font-medium text-slate-600 shadow-inner">
                             <button
-                                onClick={() => setOpen(!open)}
-                                className={`cursor-pointer rounded-full px-6 py-2 transition-all ease-in-out duration-300
-                  ${open ? "bg-white text-slate-900 shadow-sm" : ""}`}
+                                onClick={() => setOpen(true)}
+                                className={`cursor-pointer rounded-full border px-6 py-2 transition-all duration-300 ease-in-out
+                  ${open ? "border-slate-200 bg-white text-slate-900 shadow-sm ring-1 ring-slate-100" : "border-transparent"}`}
                             >
                                 Open
                             </button>
                             <button
-                                onClick={() => setOpen(!open)}
-                                className={`cursor-pointer rounded-full px-6 py-2  transition-all ease-in-out duration-300 ${
-                                    !open ? "bg-white text-slate-900 shadown-sm" : ""
+                                onClick={() => setOpen(false)}
+                                className={`cursor-pointer rounded-full border px-6 py-2 transition-all duration-300 ease-in-out ${
+                                    !open
+                                        ? "border-slate-200 bg-white text-slate-900 shadow-sm ring-1 ring-slate-100"
+                                        : "border-transparent"
                                 }`}
                             >
                                 Close
                             </button>
-                        </div>
+                        </div> */}
                     </div>
 
-                    <div className={`flex flex-col items-center gap-4 text-center ${isNight ? "text-slate-100" : "text-slate-800"}`}>
+                    <div className={`flex w-full flex-col items-center gap-4 text-center ${isNight ? "text-slate-100" : "text-slate-800"}`}>
                         <h2 className="text-2xl font-semibold">Today&apos;s Automation</h2>
                         <div className="flex w-full flex-col gap-4 sm:flex-row">
                             <button
-                                className={`flex flex-1 items-center justify-center gap-2 rounded-full border px-6 py-3 text-lg font-medium shadow hover:bg-white ${
+                                className={`flex w-full flex-1 items-center justify-center gap-2 rounded-full border px-6 py-3 text-lg font-medium shadow hover:bg-white ${
                                     isNight
                                         ? "border-white/30 bg-white/10 text-white hover:bg-white/20"
                                         : "border-blue-200 bg-white/70 text-slate-700"
@@ -417,7 +457,7 @@ export default function Home() {
                             </button>
 
                             <button
-                                className={`flex flex-1 items-center justify-center rounded-full border px-6 py-3 text-lg font-medium shadow hover:bg-white ${
+                                className={`flex w-full flex-1 items-center justify-center rounded-full border px-6 py-3 text-lg font-medium shadow hover:bg-white ${
                                     isNight
                                         ? "border-white/30 bg-white/10 text-white hover:bg-white/20"
                                         : "border-blue-200 bg-white/70 text-slate-700"
@@ -438,13 +478,34 @@ export default function Home() {
                         >
                             {scheduleFetchError ? (
                                 <span className="text-red-600">{scheduleFetchError}</span>
-                            ) : todayTime ? (
-                                <span>
-                                    Today&apos;s {open ? "open" : "close"} time:{" "}
-                                    <span className="font-semibold">{formatTimeLabel(todayTime)}</span>
-                                </span>
                             ) : (
-                                <span>No {open ? "open" : "close"} time set for today.</span>
+                                <div className="flex items-center justify-between gap-4">
+                                    <div className="flex items-center gap-2">
+                                        <span
+                                            className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${
+                                                isNight ? "bg-white/20 text-white" : "bg-blue-100 text-blue-700"
+                                            }`}
+                                            aria-hidden="true"
+                                        >
+                                            i
+                                        </span>
+                                        <span className="font-medium">Today&apos;s Schedule</span>
+                                    </div>
+                                    <div className="flex flex-col items-end text-right sm:flex-row sm:items-center sm:gap-6">
+                                        <span>
+                                            Open:{" "}
+                                            <span className="font-semibold">
+                                                {todayOpenTime ? formatTimeLabel(todayOpenTime) : "Not set"}
+                                            </span>
+                                        </span>
+                                        <span>
+                                            Close:{" "}
+                                            <span className="font-semibold">
+                                                {todayCloseTime ? formatTimeLabel(todayCloseTime) : "Not set"}
+                                            </span>
+                                        </span>
+                                    </div>
+                                </div>
                             )}
                         </div>
                     </div>
@@ -531,7 +592,13 @@ export default function Home() {
             <AutoTimeModal
                 open={autoModalOpen}
                 onClose={() => setAutoModalOpen(false)}
-                onSaved={loadSchedule}
+                initialEntries={scheduleEntries}
+                scheduleLoading={!scheduleLoaded}
+                onSaved={(updatedEntries) => {
+                    setScheduleEntries(updatedEntries || {});
+                    setScheduleFetchError("");
+                    setScheduleLoaded(true);
+                }}
                 isNight={isNight}
             />
             {/* AI Assistant */}

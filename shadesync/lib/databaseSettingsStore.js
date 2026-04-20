@@ -19,6 +19,8 @@ const defaultSettings = {
   },
   meta: {
     lastPasswordResetAt: null,
+    manualOperationCount: 0,
+    lastManualOperationAt: null,
   },
   system: {
     serialNumber: "",
@@ -122,6 +124,24 @@ export async function setPasswordResetMeta(userId) {
     return meta;
   } catch (err) {
     console.error("Error setting password reset meta:", err);
+    throw err;
+  }
+}
+
+export async function incrementManualOperationCount(userId) {
+  try {
+    const current = await getUserSettings(userId);
+    const currentCount = Number(current?.meta?.manualOperationCount || 0);
+    const meta = {
+      ...current.meta,
+      manualOperationCount: Number.isFinite(currentCount) ? currentCount + 1 : 1,
+      lastManualOperationAt: new Date().toISOString(),
+    };
+
+    await saveUserSettings(userId, { meta });
+    return meta;
+  } catch (err) {
+    console.error("Error incrementing manual operation count:", err);
     throw err;
   }
 }

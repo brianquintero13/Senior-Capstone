@@ -13,6 +13,7 @@ const DAY_MAP = {
 };
 
 const DAY_MAP_REVERSE = Object.fromEntries(Object.entries(DAY_MAP).map(([abbr, full]) => [full, abbr]));
+const normalizeTime = (value) => String(value || "").slice(0, 5);
 
 async function getDeviceForUser(userId) {
     const { data: device, error } = await supabaseService
@@ -82,8 +83,8 @@ export async function GET() {
             const abbr = DAY_MAP_REVERSE[row.day_of_week];
             if (!abbr) return;
             grouped[abbr] = grouped[abbr] || {};
-            if (row.action === "open") grouped[abbr].open = row.start_time;
-            if (row.action === "close") grouped[abbr].close = row.start_time;
+            if (row.action === "open") grouped[abbr].open = normalizeTime(row.start_time);
+            if (row.action === "close") grouped[abbr].close = normalizeTime(row.start_time);
         });
 
         return Response.json({
@@ -110,6 +111,17 @@ export async function POST(req) {
         return Response.json({ error: "Missing schedule" }, { status: 400 });
     }
 
+    for (const [, times] of Object.entries(schedule || {})) {
+        const openTime = normalizeTime(times?.open);
+        const closeTime = normalizeTime(times?.close);
+        if (openTime && closeTime && openTime === closeTime) {
+            return Response.json(
+                { error: "The open and close times cannot be the same." },
+                { status: 400 }
+            );
+        }
+    }
+
     try {
         const device = await getDeviceForUser(userId);
         const { id: scheduleId } = await getOrCreateSchedule(device.id);
@@ -117,22 +129,24 @@ export async function POST(req) {
         const entries = [];
         Object.entries(schedule || {}).forEach(([abbr, times]) => {
             const day = DAY_MAP[abbr];
+            const openTime = normalizeTime(times?.open);
+            const closeTime = normalizeTime(times?.close);
             if (!day) return;
-            if (times?.open) {
+            if (openTime) {
                 entries.push({
                     schedule_id: scheduleId,
                     day_of_week: day,
-                    start_time: times.open,
+                    start_time: openTime,
                     timezone,
                     action: "open",
                     enabled: true,
                 });
             }
-            if (times?.close) {
+            if (closeTime) {
                 entries.push({
                     schedule_id: scheduleId,
                     day_of_week: day,
-                    start_time: times.close,
+                    start_time: closeTime,
                     timezone,
                     action: "close",
                     enabled: true,

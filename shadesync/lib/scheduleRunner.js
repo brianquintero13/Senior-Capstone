@@ -32,11 +32,14 @@ if (!global[globalKey]) {
     inFlight: false,
     lastTickAt: 0,
     recentExecutionKeys: new Map(),
+    recentEvents: [],
+    eventSeq: 0,
     daemonTimer: null,
   };
 }
 
 const state = global[globalKey];
+const MAX_RECENT_EVENTS = 300;
 
 function normalizeDay(day) {
   return DAY_ALIASES[String(day || "").trim().toLowerCase()] || null;
@@ -103,6 +106,22 @@ function log(msg) {
   console.log(`[scheduler] ${msg}`);
 }
 
+function appendScheduleEvent(event) {
+  state.eventSeq += 1;
+  state.recentEvents.push({
+    seq: state.eventSeq,
+    at: new Date().toISOString(),
+    ...event,
+  });
+  if (state.recentEvents.length > MAX_RECENT_EVENTS) {
+    state.recentEvents.splice(0, state.recentEvents.length - MAX_RECENT_EVENTS);
+  }
+}
+
+function emitScheduleEvent(event) {
+  appendScheduleEvent(event);
+}
+
 async function resolveEffectiveMode(deviceRow) {
   const deviceId = deviceRow?.id;
   let mode = deviceRow?.mode || null;
@@ -129,7 +148,7 @@ async function resolveEffectiveMode(deviceRow) {
   return effectiveMode;
 }
 
-async function executeScheduledAction({ device, scheduleId, entry, now }) {
+async function executeScheduledAction({ device, scheduleId, entry, now, trigger }) {
   const action = String(entry?.action || "").toLowerCase();
   if (!["open", "close"].includes(action)) {
     return;
@@ -154,21 +173,37 @@ async function executeScheduledAction({ device, scheduleId, entry, now }) {
     shadeStateManager.clearCache();
     const currentState = await shadeStateManager.getCurrentState();
     if (currentState === SHADE_STATES.UNKNOWN) {
-      log(`SKIP device=${device.id} action=${action} reason="Shade state unknown (safety skip)"`);
+      const reason = "Shade state unknown (safety skip)";
+      log(`SKIP device=${device.id} action=${action} reason="${reason}"`);
+      emitScheduleEvent({ ownerId: device.owner_id, deviceId: device.id, outcome: "skip", action, reason, trigger });
       return;
     }
     if (action === "open" && currentState === SHADE_STATES.OPEN) {
-      log(`SKIP device=${device.id} action=${action} reason="Shades already open (scheduler pre-check)"`);
+      const reason = "Shades already open (scheduler pre-check)";
+      log(`SKIP device=${device.id} action=${action} reason="${reason}"`);
+      emitScheduleEvent({ ownerId: device.owner_id, deviceId: device.id, outcome: "skip", action, reason, trigger });
       return;
     }
     if (action === "close" && currentState === SHADE_STATES.CLOSED) {
-      log(`SKIP device=${device.id} action=${action} reason="Shades already closed (scheduler pre-check)"`);
+      const reason = "Shades already closed (scheduler pre-check)";
+      log(`SKIP device=${device.id} action=${action} reason="${reason}"`);
+      emitScheduleEvent({ ownerId: device.owner_id, deviceId: device.id, outcome: "skip", action, reason, trigger });
       return;
     }
 
     log(
       `EXECUTE device=${device.id} action=${action} at=${scheduledDay} ${scheduledHhmm} tz=${timeZone} triggerDate=${dateKey}`
     );
+    emitScheduleEvent({
+      ownerId: device.owner_id,
+      deviceId: device.id,
+      outcome: "execute",
+      action,
+      scheduledDay,
+      scheduledTime: scheduledHhmm,
+      timeZone,
+      trigger,
+    });
     await motorController.sendCommand(action);
 
     const nowIso = new Date().toISOString();
@@ -189,13 +224,24 @@ async function executeScheduledAction({ device, scheduleId, entry, now }) {
     const message = err?.message || "Unknown scheduler error";
     if (code === "REDUNDANT_OPERATION") {
       log(`SKIP device=${device.id} action=${action} reason="${message}"`);
+      emitScheduleEvent({ ownerId: device.owner_id, deviceId: device.id, outcome: "skip", action, reason: message, trigger });
       return;
     }
     if (code === "BUSY") {
-      log(`SKIP device=${device.id} action=${action} reason="Motor busy"`);
+      const reason = "Motor busy";
+      log(`SKIP device=${device.id} action=${action} reason="${reason}"`);
+      emitScheduleEvent({ ownerId: device.owner_id, deviceId: device.id, outcome: "skip", action, reason, trigger });
       return;
     }
     log(`ERROR device=${device.id} action=${action} code=${code} message="${message}"`);
+    emitScheduleEvent({
+      ownerId: device.owner_id,
+      deviceId: device.id,
+      outcome: "skip",
+      action,
+      reason: `Error: ${message}`,
+      trigger,
+    });
   }
 }
 
@@ -304,11 +350,24 @@ async function runScheduleTick(trigger = "unknown") {
     if (effectiveMode === "manual") {
       const dueActions = dueEntries.map((entry) => entry.action).join(",");
       log(`SKIP device=${device.id} reason="Manual mode active" trigger=${trigger} dueActions=${dueActions}`);
+      for (const entry of dueEntries) {
+        const action = String(entry?.action || "").toLowerCase();
+        if (["open", "close"].includes(action)) {
+          emitScheduleEvent({
+            ownerId: device.owner_id,
+            deviceId: device.id,
+            outcome: "skip",
+            action,
+            reason: "Manual mode active",
+            trigger,
+          });
+        }
+      }
       continue;
     }
 
     for (const entry of dueEntries) {
-      await executeScheduledAction({ device, scheduleId: schedule.id, entry, now });
+      await executeScheduledAction({ device, scheduleId: schedule.id, entry, now, trigger });
     }
   }
 }
@@ -341,4 +400,13 @@ export function ensureScheduleDaemonStarted() {
     state.daemonTimer.unref();
   }
   log(`Daemon started (interval=${RUN_INTERVAL_MS}ms)`);
+}
+
+export function getLatestScheduleEventSeq() {
+  return state.eventSeq || 0;
+}
+
+export function getScheduleEventsSince(seq = 0, { ownerId } = {}) {
+  const minSeq = Number(seq) || 0;
+  return state.recentEvents.filter((event) => event.seq > minSeq && (!ownerId || event.ownerId === ownerId));
 }

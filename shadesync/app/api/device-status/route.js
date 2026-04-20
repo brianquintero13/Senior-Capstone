@@ -1,7 +1,12 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { motorController } from "@/lib/motorController";
-import { ensureScheduleDaemonStarted, maybeRunScheduleTick } from "@/lib/scheduleRunner";
+import {
+  ensureScheduleDaemonStarted,
+  maybeRunScheduleTick,
+  getLatestScheduleEventSeq,
+  getScheduleEventsSince,
+} from "@/lib/scheduleRunner";
 
 export const runtime = "nodejs";
 
@@ -23,36 +28,57 @@ export async function GET(req) {
   const encoder = new TextEncoder();
   let unsubscribe = null;
   let heartbeat = null;
+  let schedulerFlush = null;
+  let lastScheduleEventSeq = getLatestScheduleEventSeq();
 
   const stream = new ReadableStream({
     start(controller) {
       const sendStatus = (snapshot) => {
         controller.enqueue(encoder.encode(toSseEvent("status", snapshot)));
       };
+      const sendSchedulerEvents = () => {
+        const events = getScheduleEventsSince(lastScheduleEventSeq, { ownerId: session.user.id });
+        for (const event of events) {
+          controller.enqueue(encoder.encode(toSseEvent("scheduler", event)));
+        }
+        if (events.length > 0) {
+          lastScheduleEventSeq = events[events.length - 1].seq;
+        }
+      };
 
       sendStatus(motorController.getSnapshot());
+      sendSchedulerEvents();
       const onStatus = (snapshot) => sendStatus(snapshot);
       motorController.on("status", onStatus);
       unsubscribe = () => {
         motorController.off("status", onStatus);
       };
 
-      heartbeat = setInterval(() => {
+      schedulerFlush = setInterval(() => {
+        sendSchedulerEvents();
+      }, 2000);
+
+      heartbeat = setInterval(async () => {
         controller.enqueue(encoder.encode(": ping\n\n"));
-        maybeRunScheduleTick({ trigger: "device-status-heartbeat" }).catch((err) => {
+        try {
+          await maybeRunScheduleTick({ trigger: "device-status-heartbeat" });
+        } catch (err) {
           console.error(`[scheduler] ERROR heartbeat tick failed: ${err?.message || String(err)}`);
-        });
+        }
+        sendSchedulerEvents();
       }, 15000);
     },
     cancel() {
       if (unsubscribe) unsubscribe();
       if (heartbeat) clearInterval(heartbeat);
+      if (schedulerFlush) clearInterval(schedulerFlush);
     },
   });
 
   req.signal.addEventListener("abort", () => {
     if (unsubscribe) unsubscribe();
     if (heartbeat) clearInterval(heartbeat);
+    if (schedulerFlush) clearInterval(schedulerFlush);
   });
 
   return new Response(stream, {

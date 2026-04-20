@@ -3,6 +3,7 @@ import { authOptions } from "@/lib/auth";
 import { supabaseService } from "@/lib/supabaseService";
 import { getResolvedDeviceMode, saveDeviceMode } from "@/lib/deviceModeStore";
 import { motorController } from "@/lib/motorController";
+import { incrementManualOperationCount } from "@/lib/databaseSettingsStore";
 
 export const runtime = "nodejs";
 
@@ -158,6 +159,14 @@ export async function POST(req) {
       status: "sent",
       metadata: { source, modeAtCommand: effectiveMode, manualOverrideActive },
     });
+
+  if (source === "manual") {
+    try {
+      await incrementManualOperationCount(session.user.id);
+    } catch (counterErr) {
+      console.error("Failed to increment manual operation counter:", counterErr);
+    }
+  }
 
   return Response.json({
     ok: true,

@@ -19,6 +19,9 @@ const geistMono = Roboto_Mono({
 export const metadata = {
     title: "ShadeSync",
     description: "Smart motorized window shade control",
+    icons: {
+        icon: "/window.png",
+    },
 };
 
 export default function RootLayout({ children }) {
