@@ -203,6 +203,47 @@ export default async function AccountPage() {
               </button>
             </div>
 
+            {/* WiFi Configuration */}
+            <div className="rounded-2xl border border-slate-200 bg-white/90 p-6">
+              <h2 className="text-lg font-semibold text-slate-900">Device WiFi Configuration</h2>
+              <p className="mt-2 text-slate-700">Configure your ESP32 device to connect to your WiFi network.</p>
+
+              <div className="mt-4 space-y-4">
+                <div>
+                  <label htmlFor="wifiSSID" className="block text-sm font-medium text-slate-700">
+                    WiFi Network Name (SSID)
+                  </label>
+                  <input
+                    type="text"
+                    id="wifiSSID"
+                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+                    placeholder="Your WiFi network name"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="wifiPassword" className="block text-sm font-medium text-slate-700">
+                    WiFi Password
+                  </label>
+                  <input
+                    type="password"
+                    id="wifiPassword"
+                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+                    placeholder="Your WiFi password"
+                  />
+                </div>
+              </div>
+
+              <button
+                id="saveWiFiBtn"
+                className="mt-4 rounded-lg bg-[#2d4c7c] px-4 py-2 text-sm font-semibold text-white shadow hover:bg-[#3b5d98]"
+              >
+                Send WiFi Configuration to Device
+              </button>
+              <p className="mt-2 text-xs text-slate-500">
+                The device will reboot after receiving new WiFi credentials.
+              </p>
+            </div>
+
             {/* Sign Out */}
             <div className="flex items-center justify-between">
               <div>

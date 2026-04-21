@@ -74,9 +74,17 @@ class AIService {
       console.log("📊 Usage:", data.usage);
       
       if (data.choices[0].message.function_call) {
+        // Fix Python-style booleans in function arguments
+        let functionCall = data.choices[0].message.function_call;
+        if (functionCall.arguments) {
+          functionCall.arguments = functionCall.arguments
+            .replace(/True/g, 'true')
+            .replace(/False/g, 'false')
+            .replace(/None/g, 'null');
+        }
         return {
           type: 'function_call',
-          function: data.choices[0].message.function_call
+          function: functionCall
         };
       }
       
@@ -286,22 +294,37 @@ class AIService {
 
   async getEnergySavingTips(weather, shadeState, usagePatterns) {
     const temp = weather.main?.temp || 0;
+    const tempFahrenheit = (temp * 9/5) + 32;
+    const condition = weather.weather?.[0]?.description || 'Unknown';
+    
     const prompt = `
-      Provide exactly 2 energy saving tips for automated shades.
+      Provide exactly 2 practical, actionable energy saving tips for automated shades based on current conditions.
+      
+      Current conditions:
+      - Temperature: ${tempFahrenheit.toFixed(1)}°F
+      - Weather: ${condition}
+      - Shade state: ${shadeState}
+      
+      Provide SPECIFIC, USEFUL advice like:
+      • Close shades before 10am to block morning sun
+      • Open shades at 6pm for evening cooling
+      • Close shades when AC runs to reduce load
+      • Adjust shades based on sun direction
+      • Close shades during hottest hours (12-4pm)
       
       STRICT RULES:
-      - Maximum 2 bullets total
-      - Maximum 5 words per bullet
+      - Maximum 2 bullets
+      - Maximum 8 words per bullet
       - No preamble, no introduction
       - Start directly with bullets
-      - Be very brief
+      - Be specific and actionable
       
-      Example format:
-      • Close shades midday
-      • Open shades morning
+      Format:
+      • [specific time-based or condition-based action]
+      • [specific time-based or condition-based action]
     `;
 
-    const systemPrompt = "You provide extremely brief energy-saving advice. Exactly 2 bullets, maximum 5 words each. No preamble.";
+    const systemPrompt = "You provide specific, actionable energy-saving advice for automated shades. Focus on time-based and condition-based recommendations.";
 
     return await this.callAI(prompt, systemPrompt);
   }

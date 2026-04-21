@@ -136,48 +136,44 @@ export default function AIInsights({ isNight, zipCode }) {
 
           {/* Energy saving tips */}
           {insights?.energyTips && (
-            <div className={`mb-3 p-3 rounded-lg ${
+            <div className={`mb-3 p-3 rounded-lg text-center ${
               isNight ? "bg-green-500/20 text-green-200" : "bg-green-100 text-green-800"
             }`}>
-              <div className="flex items-start gap-2">
+              <div className="flex items-center justify-center gap-2">
                 <span className="text-lg">💡</span>
-                <div>
-                  <div className="font-medium text-sm">Energy Saving Tips</div>
-                  <div className="text-xs mt-1 opacity-90">
-                    {formatTips(insights.energyTips).map((tip, index) => (
-                      <div key={index} className="mb-1">• {tip.trim()}</div>
-                    ))}
-                  </div>
-                </div>
+                <div className="font-medium text-sm">Energy Saving Tips</div>
+              </div>
+              <div className="text-xs mt-2 opacity-90">
+                {formatTips(insights.energyTips).map((tip, index) => (
+                  <div key={index} className="mb-1">{tip.trim()}</div>
+                ))}
               </div>
             </div>
           )}
 
           {/* Usage patterns summary */}
           {insights?.usagePatterns && (
-            <div className={`p-3 rounded-lg ${
+            <div className={`p-3 rounded-lg text-center ${
               isNight ? "bg-purple-500/20 text-purple-200" : "bg-purple-100 text-purple-800"
             }`}>
-              <div className="flex items-start gap-2">
+              <div className="flex items-center justify-center gap-2">
                 <span className="text-lg">📊</span>
-                <div>
-                  <div className="font-medium text-sm">Your Patterns</div>
-                  <div className="text-xs mt-1 opacity-90">
-                    {insights.usagePatterns.message ? (
-                      <div>{insights.usagePatterns.message}</div>
-                    ) : (
-                      <>
-                        {insights.usagePatterns.mostCommonOpenTime && insights.usagePatterns.mostCommonOpenTime !== "Not enough data" && (
-                          <div>• Often open at {insights.usagePatterns.mostCommonOpenTime}</div>
-                        )}
-                        {insights.usagePatterns.mostCommonCloseTime && insights.usagePatterns.mostCommonCloseTime !== "Not enough data" && (
-                          <div>• Often close at {insights.usagePatterns.mostCommonCloseTime}</div>
-                        )}
-                        <div>• {insights.usagePatterns.totalOperations} manual adjustments last 30 days</div>
-                      </>
+                <div className="font-medium text-sm">Your Patterns</div>
+              </div>
+              <div className="text-xs mt-2 opacity-90">
+                {insights.usagePatterns.message ? (
+                  <div>{insights.usagePatterns.message}</div>
+                ) : (
+                  <>
+                    {insights.usagePatterns.mostCommonOpenTime && insights.usagePatterns.mostCommonOpenTime !== "Not enough data" && (
+                      <div>Often open at {insights.usagePatterns.mostCommonOpenTime}</div>
                     )}
-                  </div>
-                </div>
+                    {insights.usagePatterns.mostCommonCloseTime && insights.usagePatterns.mostCommonCloseTime !== "Not enough data" && (
+                      <div>Often close at {insights.usagePatterns.mostCommonCloseTime}</div>
+                    )}
+                    <div>{insights.usagePatterns.totalOperations} manual adjustments last 30 days</div>
+                  </>
+                )}
               </div>
             </div>
           )}

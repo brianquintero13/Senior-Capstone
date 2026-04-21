@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { aiService } from './aiService.js';
+import { getUserSettings } from './databaseSettingsStore.js';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -12,10 +13,42 @@ class AINotificationService {
     this.notificationHistory = new Map(); // Track recent notifications to avoid spam
   }
 
+  // Map AI notification types to user notification preferences
+  isNotificationEnabled(notificationType, userPreferences) {
+    const typeMapping = {
+      'weather_alert': 'deviceAlerts',
+      'device_alert': 'deviceAlerts',
+      'pattern_suggestion': 'automationUpdates',
+      'pattern_insight': 'automationUpdates',
+      'schedule_suggestion': 'scheduleNotifications',
+      'schedule_status': 'scheduleNotifications',
+      'system': 'systemAnnouncements',
+      'system_alert': 'systemAnnouncements',
+      'automation': 'automationUpdates',
+      'test': 'deviceAlerts',
+    };
+
+    const preferenceKey = typeMapping[notificationType] || 'deviceAlerts';
+    return userPreferences[preferenceKey] === true;
+  }
+
   async checkAndSendNotifications(userId) {
     try {
       console.log("🔔 Checking for AI-powered notifications...");
       
+      // Get user's notification preferences
+      const userSettings = await getUserSettings(userId);
+      const notifications = userSettings?.notifications || {};
+      
+      console.log("User notification preferences:", notifications);
+      
+      // Check if user has any notifications enabled
+      const hasEnabledNotifications = Object.values(notifications).some(enabled => enabled === true);
+      if (!hasEnabledNotifications) {
+        console.log("🔕 User has all notifications disabled");
+        return [];
+      }
+
       // Get user's device
       const { data: device } = await supabase
         .from("devices")
@@ -102,6 +135,12 @@ class AINotificationService {
       console.log("🤖 AI Notification Decision:", aiDecision);
 
       if (aiDecision.should_notify) {
+        // Check if this notification type is enabled by user preferences
+        if (!this.isNotificationEnabled(aiDecision.notification_type, notifications)) {
+          console.log(`🔕 Notification type '${aiDecision.notification_type}' is disabled by user preferences`);
+          return [];
+        }
+
         // Check if we recently sent a similar notification to avoid spam
         const notificationKey = `${userId}_${aiDecision.notification_type}`;
         const lastSent = this.notificationHistory.get(notificationKey);
@@ -138,12 +177,12 @@ class AINotificationService {
     }
   }
 
-  async generateNotifications(weather, shadeState, recentCommands, userEmail) {
+  async generateNotifications(weather, shadeState, recentCommands, userEmail, userPreferences = {}) {
     const notifications = [];
     const tempFahrenheit = (weather.main.temp * 9/5) + 32;
 
-    // Weather-based notification
-    if (tempFahrenheit > 75 && shadeState === 'open') {
+    // Weather-based notification (device alerts)
+    if (tempFahrenheit > 75 && shadeState === 'open' && this.isNotificationEnabled('weather_alert', userPreferences)) {
       notifications.push({
         type: 'weather_alert',
         subject: '🌡️ ShadeSync: Hot Weather Alert',
@@ -153,12 +192,12 @@ class AINotificationService {
       });
     }
 
-    // Pattern-based notification
+    // Pattern-based notification (automation updates)
     if (recentCommands.length > 0) {
       const manualCommands = recentCommands.filter(cmd => cmd.action !== 'auto');
       
       // Check for frequent manual overrides
-      if (manualCommands.length > 5) {
+      if (manualCommands.length > 5 && this.isNotificationEnabled('pattern_suggestion', userPreferences)) {
         notifications.push({
           type: 'pattern_suggestion',
           subject: '📊 ShadeSync: Schedule Optimization Suggestion',
@@ -172,7 +211,7 @@ class AINotificationService {
       const openCommands = manualCommands.filter(cmd => cmd.action === 'open');
       const closeCommands = manualCommands.filter(cmd => cmd.action === 'close');
       
-      if (openCommands.length > 0 && closeCommands.length > 0) {
+      if (openCommands.length > 0 && closeCommands.length > 0 && this.isNotificationEnabled('pattern_insight', userPreferences)) {
         const avgOpenTime = this.getAverageTime(openCommands);
         const avgCloseTime = this.getAverageTime(closeCommands);
         

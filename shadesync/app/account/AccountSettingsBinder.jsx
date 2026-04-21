@@ -243,11 +243,48 @@ export default function AccountSettingsBinder() {
       document.getElementById("zipCode")?.focus();
     };
 
+    const onSaveWiFi = async () => {
+      const ssid = document.getElementById("wifiSSID")?.value?.trim();
+      const password = document.getElementById("wifiPassword")?.value?.trim();
+
+      if (!ssid || !password) {
+        toast.error("Please enter both WiFi name and password");
+        return;
+      }
+
+      try {
+        const response = await fetch("/api/wifi-config", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ ssid, password }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || "Failed to send WiFi configuration");
+        }
+
+        const result = await response.json();
+        toast.success("WiFi configuration sent to device. Device will reboot.");
+        
+        // Clear the form
+        document.getElementById("wifiSSID").value = "";
+        document.getElementById("wifiPassword").value = "";
+      } catch (err) {
+        console.error("WiFi config error:", err);
+        toast.error(`Failed to send WiFi configuration: ${err.message}`);
+      }
+    };
+
     prefBtn?.addEventListener("click", onSavePrefs);
     autoBtn?.addEventListener("click", onSaveAuto);
     systemBtn?.addEventListener("click", onSaveSystem);
     updateSerialBtn?.addEventListener("click", onUpdateSerial);
     updateZipBtn?.addEventListener("click", onUpdateZip);
+    const wifiBtn = document.getElementById("saveWiFiBtn");
+    wifiBtn?.addEventListener("click", onSaveWiFi);
 
     return () => {
       prefBtn?.removeEventListener("click", onSavePrefs);
@@ -255,6 +292,7 @@ export default function AccountSettingsBinder() {
       systemBtn?.removeEventListener("click", onSaveSystem);
       updateSerialBtn?.removeEventListener("click", onUpdateSerial);
       updateZipBtn?.removeEventListener("click", onUpdateZip);
+      wifiBtn?.removeEventListener("click", onSaveWiFi);
     };
   }, []);
 

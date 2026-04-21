@@ -22,9 +22,23 @@ export async function POST(request) {
       .eq("owner_id", session.user.id)
       .single();
 
-    // Get user settings for zip code
+    // Get user settings for zip code and notification preferences
     const userSettings = await getUserSettings(session.user.id);
     const userZipCode = userSettings?.system?.zipCode || "33615";
+    const userNotifications = userSettings?.notifications || {};
+    
+    console.log("User notification preferences:", userNotifications);
+
+    // Check if user has any notifications enabled
+    const hasEnabledNotifications = Object.values(userNotifications).some(enabled => enabled === true);
+    if (!hasEnabledNotifications) {
+      console.log("🔕 User has all notifications disabled");
+      return NextResponse.json({
+        success: true,
+        notification_sent: false,
+        reason: "All notifications are disabled in user preferences"
+      });
+    }
 
     if (!device) {
       return NextResponse.json({ error: "No device found" }, { status: 404 });
@@ -94,6 +108,29 @@ export async function POST(request) {
     console.log("🤖 AI Decision:", aiDecision);
 
     if (aiDecision.should_notify) {
+      // Check if this notification type is enabled by user preferences
+      const typeMapping = {
+        'weather_alert': 'deviceAlerts',
+        'device_alert': 'deviceAlerts',
+        'pattern_suggestion': 'automationUpdates',
+        'pattern_insight': 'automationUpdates',
+        'schedule_suggestion': 'scheduleNotifications',
+        'schedule_status': 'scheduleNotifications',
+        'system': 'systemAnnouncements',
+        'system_alert': 'systemAnnouncements',
+        'automation': 'automationUpdates',
+      };
+
+      const preferenceKey = typeMapping[aiDecision.notification_type] || 'deviceAlerts';
+      if (!userNotifications[preferenceKey]) {
+        console.log(`🔕 Notification type '${aiDecision.notification_type}' is disabled by user preferences`);
+        return NextResponse.json({
+          success: true,
+          notification_sent: false,
+          reason: `Notification type '${aiDecision.notification_type}' is disabled in user preferences`
+        });
+      }
+
       console.log("📧 Sending notification based on AI decision...");
       
       const notification = {
