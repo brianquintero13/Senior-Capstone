@@ -203,25 +203,6 @@ export default async function AccountPage() {
               </button>
             </div>
 
-            {/* Theme */}
-            <div className="rounded-2xl border border-slate-200 bg-white/90 p-6">
-              <h2 className="text-lg font-semibold text-slate-900">Appearance</h2>
-              <p className="mt-2 text-slate-700">Choose how ShadeSync looks on your device.</p>
-
-              <select id="themeSelect" className="mt-4 w-full rounded-lg border border-slate-300 px-3 py-2">
-                <option>Light</option>
-                <option>Dark</option>
-                <option>System</option>
-              </select>
-
-              <button
-                id="saveThemeBtn"
-                className="mt-4 rounded-lg bg-[#2d4c7c] px-4 py-2 text-sm font-semibold text-white shadow hover:bg-[#3b5d98]"
-              >
-                Save Theme
-              </button>
-            </div>
-
             {/* Sign Out */}
             <div className="flex items-center justify-between">
               <div>

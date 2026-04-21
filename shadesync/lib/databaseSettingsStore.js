@@ -14,9 +14,6 @@ const defaultSettings = {
     openingPosition: 75,
     sunlightSensitivity: "Medium",
   },
-  appearance: {
-    theme: "Light",
-  },
   meta: {
     lastPasswordResetAt: null,
     manualOperationCount: 0,
@@ -51,7 +48,6 @@ export async function getUserSettings(userId) {
       profile: { ...defaultSettings.profile, ...data.profile },
       notifications: { ...defaultSettings.notifications, ...data.notifications },
       automation: { ...defaultSettings.automation, ...data.automation },
-      appearance: { ...defaultSettings.appearance, ...data.appearance },
       meta: { ...defaultSettings.meta, ...data.meta },
       system: { ...defaultSettings.system, ...data.system },
     };
@@ -71,7 +67,6 @@ export async function saveUserSettings(userId, partial) {
       profile: { ...current.profile, ...partial.profile },
       notifications: { ...current.notifications, ...partial.notifications },
       automation: { ...current.automation, ...partial.automation },
-      appearance: { ...current.appearance, ...partial.appearance },
       meta: { ...current.meta, ...partial.meta },
       system: { ...current.system, ...partial.system },
     };

@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { aiService } from './aiService.js';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -8,20 +9,23 @@ const supabase = createClient(
 class AINotificationService {
   constructor() {
     this.openaiApiKey = process.env.OPENAI_API_KEY;
+    this.notificationHistory = new Map(); // Track recent notifications to avoid spam
   }
 
   async checkAndSendNotifications(userId) {
     try {
-      // Get user's device and settings
+      console.log("🔔 Checking for AI-powered notifications...");
+      
+      // Get user's device
       const { data: device } = await supabase
         .from("devices")
-        .select("id, zip_code, owner_id")
+        .select("id, owner_id")
         .eq("owner_id", userId)
         .single();
 
       if (!device) {
         console.log("No device found for user:", userId);
-        return;
+        return [];
       }
 
       // Get user's email
@@ -30,7 +34,7 @@ class AINotificationService {
       
       if (!userEmail) {
         console.log("No email found for user:", userId);
-        return;
+        return [];
       }
 
       // Get current shade state
@@ -42,41 +46,92 @@ class AINotificationService {
 
       const currentShadeState = shadeStateData?.state || "unknown";
 
-      // Get weather data
+      // Get weather data (use Tampa as default)
       let weather = { main: { temp: 0 }, weather: [{ description: "Unknown" }] };
-      if (device.zip_code) {
-        try {
-          weather = await this.getWeatherForZip(device.zip_code);
-        } catch (error) {
-          console.error("Weather fetch error:", error);
+      const defaultZipCode = "33615";
+      try {
+        const apiKey = process.env.OPEN_WEATHER_API_KEY;
+        const geoResponse = await fetch(
+          `http://api.openweathermap.org/geo/1.0/zip?zip=${defaultZipCode},US&appid=${apiKey}`
+        );
+        
+        if (geoResponse.ok) {
+          const geoData = await geoResponse.json();
+          const weatherResponse = await fetch(
+            `https://api.openweathermap.org/data/2.5/weather?lat=${geoData.lat}&lon=${geoData.lon}&appid=${apiKey}&units=metric`
+          );
+          
+          if (weatherResponse.ok) {
+            weather = await weatherResponse.json();
+          }
         }
+      } catch (error) {
+        console.error("Weather fetch error:", error);
       }
 
-      // Get recent usage patterns (last 7 days)
-      const sevenDaysAgo = new Date();
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      // Get recent operations (last 24 hours)
+      const twentyFourHoursAgo = new Date();
+      twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
       
       const { data: recentCommands } = await supabase
         .from("device_commands")
         .select("action, created_at")
         .eq("device_id", device.id)
-        .gte("created_at", sevenDaysAgo.toISOString())
-        .order("created_at", { ascending: false });
+        .gte("created_at", twentyFourHoursAgo.toISOString())
+        .order("created_at", { ascending: false })
+        .limit(10);
 
-      // Analyze and generate notifications
-      const notifications = await this.generateNotifications(
+      // Get current schedule
+      const { data: scheduleData } = await supabase
+        .from("schedules")
+        .select("entries")
+        .eq("id", 1)
+        .single();
+
+      const schedule = scheduleData?.entries || {};
+
+      // Use AI to determine if notification should be sent
+      const aiDecision = await aiService.analyzeForNotification(
+        userId,
         weather,
         currentShadeState,
-        recentCommands || [],
-        userEmail
+        schedule,
+        recentCommands || []
       );
 
-      // Send notifications
-      for (const notification of notifications) {
-        await this.sendEmailNotification(notification);
-      }
+      console.log("🤖 AI Notification Decision:", aiDecision);
 
-      return notifications;
+      if (aiDecision.should_notify) {
+        // Check if we recently sent a similar notification to avoid spam
+        const notificationKey = `${userId}_${aiDecision.notification_type}`;
+        const lastSent = this.notificationHistory.get(notificationKey);
+        const now = Date.now();
+        
+        // Don't send same notification type within 1 hour (except high priority)
+        if (aiDecision.priority !== 'high' && lastSent && (now - lastSent) < 3600000) {
+          console.log("🔕 Skipping notification - recently sent similar notification");
+          return [];
+        }
+
+        const notification = {
+          type: aiDecision.notification_type,
+          subject: `🤖 ShadeSync: ${aiDecision.notification_type.replace('_', ' ').toUpperCase()}`,
+          body: aiDecision.message,
+          priority: aiDecision.priority,
+          email: userEmail
+        };
+
+        await this.sendEmailNotification(notification);
+        
+        // Track this notification
+        this.notificationHistory.set(notificationKey, now);
+        
+        console.log("✅ AI-powered notification sent successfully");
+        return [notification];
+      } else {
+        console.log("🔕 AI decided not to send notification:", aiDecision.reason);
+        return [];
+      }
     } catch (error) {
       console.error("Error in AI notification service:", error);
       throw error;

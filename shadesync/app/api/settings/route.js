@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getUserSettings, saveUserSettings } from "@/lib/databaseSettingsStore";
+import { supabaseService } from "@/lib/supabaseService";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -24,10 +25,20 @@ export async function POST(req) {
   }
   try {
     const body = await req.json().catch(() => ({}));
+    console.log("Saving settings:", body);
+    
+    // Try to ensure user_settings table has proper structure
+    try {
+      await supabaseService.rpc('ensure_user_settings_structure');
+    } catch (e) {
+      console.log("Structure check skipped:", e.message);
+    }
+    
     const updated = await saveUserSettings(session.user.id, body || {});
+    console.log("Settings saved successfully:", updated);
     return NextResponse.json({ settings: updated });
   } catch (err) {
     console.error("Settings POST error:", err);
-    return NextResponse.json({ error: "Failed to save settings" }, { status: 500 });
+    return NextResponse.json({ error: "Failed to save settings", details: err.message }, { status: 500 });
   }
 }

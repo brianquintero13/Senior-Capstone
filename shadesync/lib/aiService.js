@@ -8,36 +8,135 @@ const supabase = createClient(
 class AIService {
   constructor() {
     this.openaiApiKey = process.env.OPENAI_API_KEY;
+    this.groqApiKey = process.env.GROQ_API_KEY;
     this.baseUrl = 'https://api.openai.com/v1';
+    this.groqBaseUrl = 'https://api.groq.com/openai/v1';
+    this.provider = this.groqApiKey ? 'groq' : (this.openaiApiKey ? 'openai' : null);
   }
 
-  async callOpenAI(prompt, systemPrompt = "You are a helpful home automation assistant for ShadeSync.") {
+  async callAI(prompt, systemPrompt = "You are a helpful home automation assistant for ShadeSync.", functions = null) {
+    // Try Groq first (free), fallback to OpenAI if Groq fails
+    if (this.groqApiKey) {
+      try {
+        return await this.callGroq(prompt, systemPrompt, functions);
+      } catch (error) {
+        console.error("Groq API failed, trying OpenAI:", error.message);
+        if (this.openaiApiKey) {
+          return await this.callOpenAI(prompt, systemPrompt, functions);
+        }
+        throw error;
+      }
+    } else if (this.openaiApiKey) {
+      return await this.callOpenAI(prompt, systemPrompt, functions);
+    } else {
+      throw new Error("No AI API key configured. Please set GROQ_API_KEY or OPENAI_API_KEY in environment variables.");
+    }
+  }
+
+  async callGroq(prompt, systemPrompt = "You are a helpful home automation assistant for ShadeSync.", functions = null) {
     try {
+      console.log("🤖 Calling Groq API (FREE)...");
+      console.log("🔑 Groq API Key exists:", !!this.groqApiKey);
+      console.log("🔑 API Key starts with:", this.groqApiKey?.substring(0, 10) + "...");
+      
+      const requestBody = {
+        model: 'llama-3.1-8b-instant', // Free Groq model (current)
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: prompt }
+        ],
+        max_tokens: 500,
+        temperature: 0.7,
+      };
+
+      if (functions) {
+        requestBody.functions = functions;
+        requestBody.function_call = "auto";
+      }
+
+      const response = await fetch(`${this.groqBaseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.groqApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("❌ Groq API error response:", errorData);
+        throw new Error(`Groq API error: ${response.status} - ${errorData.error?.message || response.statusText}`);
+      }
+
+      const data = await response.json();
+      console.log("✅ Groq API call successful");
+      console.log("📊 Usage:", data.usage);
+      
+      if (data.choices[0].message.function_call) {
+        return {
+          type: 'function_call',
+          function: data.choices[0].message.function_call
+        };
+      }
+      
+      return data.choices[0].message.content.trim();
+    } catch (error) {
+      console.error('❌ Groq Service Error:', error);
+      throw error;
+    }
+  }
+
+  async callOpenAI(prompt, systemPrompt = "You are a helpful home automation assistant for ShadeSync.", functions = null) {
+    try {
+      console.log("🤖 Calling OpenAI API...");
+      console.log("🔑 API Key exists:", !!this.openaiApiKey);
+      console.log("🔑 API Key starts with:", this.openaiApiKey?.substring(0, 10) + "...");
+      
+      const requestBody = {
+        model: 'gpt-3.5-turbo',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: prompt }
+        ],
+        max_tokens: 500,
+        temperature: 0.7,
+      };
+
+      if (functions) {
+        requestBody.functions = functions;
+        requestBody.function_call = "auto";
+      }
+
       const response = await fetch(`${this.baseUrl}/chat/completions`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${this.openaiApiKey}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          model: 'gpt-3.5-turbo',
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: prompt }
-          ],
-          max_tokens: 300,
-          temperature: 0.7,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {
-        throw new Error(`OpenAI API error: ${response.statusText}`);
+        const errorData = await response.json();
+        console.error("❌ OpenAI API error response:", errorData);
+        throw new Error(`OpenAI API error: ${response.status} - ${errorData.error?.message || response.statusText}`);
       }
 
       const data = await response.json();
+      console.log("✅ OpenAI API call successful");
+      console.log("📊 Usage:", data.usage);
+      
+      if (data.choices[0].message.function_call) {
+        return {
+          type: 'function_call',
+          function: data.choices[0].message.function_call
+        };
+      }
+      
       return data.choices[0].message.content.trim();
     } catch (error) {
-      console.error('AI Service Error:', error);
+      console.error('❌ AI Service Error:', error);
       throw error;
     }
   }
@@ -45,26 +144,31 @@ class AIService {
   async getWeatherSuggestion(weather, currentShadeState) {
     const temp = weather.main?.temp || 0;
     const tempFahrenheit = (temp * 9/5) + 32;
-    
-    if (tempFahrenheit > 75 && currentShadeState === 'open') {
-      const prompt = `
-        Current weather data:
-        - Temperature: ${tempFahrenheit.toFixed(1)}°F
-        - Condition: ${weather.weather?.[0]?.description || 'Unknown'}
-        - Humidity: ${weather.main?.humidity || 0}%
-        - Current shade state: ${currentShadeState}
-        
-        The temperature is above 75°F and shades are currently open. Provide a brief, friendly suggestion 
-        about closing the shades to keep the home cool. Mention energy savings and comfort benefits.
-        Keep it under 100 words and be conversational.
-      `;
+    const condition = weather.weather?.[0]?.description || 'Unknown';
+    const humidity = weather.main?.humidity || 0;
 
-      const systemPrompt = "You are a helpful home automation assistant for ShadeSync. Provide practical energy-saving advice in a friendly tone.";
+    const prompt = `
+      Current weather data:
+      - Temperature: ${tempFahrenheit.toFixed(1)}°F
+      - Condition: ${condition}
+      - Humidity: ${humidity}%
+      - Current shade state: ${currentShadeState}
+      
+      Provide a specific recommendation based on these rules:
+      1. If temperature > 75°F: Recommend CLOSED to reduce AC usage and keep home cool
+      2. If temperature <= 75°F and sunny: Recommend OPEN to let in natural light
+      3. If temperature <= 75°F and cloudy/rainy: Recommend CLOSED for comfort
+      
+      Format your response as:
+      Recommendation: [OPEN or CLOSED]
+      Reason: [brief explanation mentioning temperature and benefit]
+      
+      Keep it concise and actionable.
+    `;
 
-      return await this.callOpenAI(prompt, systemPrompt);
-    }
-    
-    return null;
+    const systemPrompt = "You are a helpful home automation assistant for ShadeSync. Prioritize energy efficiency and comfort in shade recommendations.";
+
+    return await this.callAI(prompt, systemPrompt);
   }
 
   async analyzeUsagePatterns(userId, days = 30) {
@@ -177,33 +281,35 @@ class AIService {
 
     const systemPrompt = "You are a smart home automation advisor. Analyze usage patterns and provide specific, actionable schedule optimization suggestions.";
 
-    return await this.callOpenAI(prompt, systemPrompt);
+    return await this.callAI(prompt, systemPrompt);
   }
 
   async getEnergySavingTips(weather, shadeState, usagePatterns) {
     const temp = weather.main?.temp || 0;
-    const tempFahrenheit = (temp * 9/5) + 32;
-    const condition = weather.weather?.[0]?.description || 'Unknown';
-
     const prompt = `
-      Current conditions:
-      - Temperature: ${tempFahrenheit.toFixed(1)}°F
-      - Weather: ${condition}
-      - Shade state: ${shadeState}
-      - Usage patterns: ${usagePatterns?.totalOperations || 0} manual operations in last 30 days
+      Provide exactly 2 energy saving tips for automated shades.
       
-      Provide 2-3 brief energy-saving tips specific to these conditions. 
-      Focus on shade optimization for energy efficiency and comfort.
-      Keep each tip under 50 words.
+      STRICT RULES:
+      - Maximum 2 bullets total
+      - Maximum 5 words per bullet
+      - No preamble, no introduction
+      - Start directly with bullets
+      - Be very brief
+      
+      Example format:
+      • Close shades midday
+      • Open shades morning
     `;
 
-    const systemPrompt = "You are an energy efficiency expert for smart homes. Provide practical, actionable energy-saving tips.";
+    const systemPrompt = "You provide extremely brief energy-saving advice. Exactly 2 bullets, maximum 5 words each. No preamble.";
 
-    return await this.callOpenAI(prompt, systemPrompt);
+    return await this.callAI(prompt, systemPrompt);
   }
 
   async generateInsightReport(userId, weather, currentShadeState, currentSchedule) {
     try {
+      console.log("🧠 Generating comprehensive AI insight report...");
+      
       const [usagePatterns, weatherSuggestion, energyTips, scheduleSuggestions] = await Promise.all([
         this.analyzeUsagePatterns(userId),
         this.getWeatherSuggestion(weather, currentShadeState),
@@ -227,6 +333,107 @@ class AIService {
       return {
         error: 'Failed to generate AI insights',
         timestamp: new Date().toISOString()
+      };
+    }
+  }
+
+  async analyzeForNotification(userId, weather, currentShadeState, currentSchedule, recentOperations) {
+    console.log("🤖 Analyzing data for periodic notification...");
+    
+    const functions = [
+      {
+        name: "send_notification",
+        description: "Send a notification to the user about their shade system",
+        parameters: {
+          type: "object",
+          properties: {
+            should_notify: {
+              type: "boolean",
+              description: "Whether to send a notification based on the analysis"
+            },
+            notification_type: {
+              type: "string",
+              enum: ["weather_alert", "pattern_insight", "schedule_suggestion", "energy_tip", "daily_summary", "none"],
+              description: "The type of notification to send. Use 'none' if should_notify is false."
+            },
+            priority: {
+              type: "string",
+              enum: ["high", "medium", "low", "none"],
+              description: "The priority level of the notification. Use 'none' if should_notify is false."
+            },
+            reason: {
+              type: "string",
+              description: "The reason why this notification should be sent or why not"
+            },
+            message: {
+              type: "string",
+              description: "The actual notification message to send to the user. Empty string if should_notify is false."
+            }
+          },
+          required: ["should_notify", "notification_type", "priority", "reason", "message"]
+        }
+      }
+    ];
+
+    const temp = weather.main?.temp || 0;
+    const tempFahrenheit = (temp * 9/5) + 32;
+    const condition = weather.weather?.[0]?.description || 'Unknown';
+    
+    const prompt = `
+      Analyze the following shade system data and determine if a notification should be sent to the user.
+      
+      Current Conditions:
+      - Temperature: ${tempFahrenheit.toFixed(1)}°F
+      - Weather: ${condition}
+      - Current shade state: ${currentShadeState}
+      
+      Recent Activity:
+      - Recent manual operations: ${recentOperations?.length || 0} in the last period
+      - Operation types: ${recentOperations?.map(op => op.action).join(', ') || 'none'}
+      
+      Use the send_notification function to indicate if a notification should be sent and what type.
+      
+      Consider these triggers:
+      1. Weather alerts: Temperature > 75°F and shades open (high priority)
+      2. Pattern insights: After 5+ manual operations (medium priority)
+      3. Schedule suggestions: Frequent manual overrides (medium priority)
+      4. Energy tips: General optimization advice (low priority)
+      5. Daily summary: End of day summary (low priority)
+    `;
+
+    const systemPrompt = "You are an intelligent home automation assistant for ShadeSync. Analyze user data and determine when to send helpful notifications. Be proactive but not annoying - only send notifications that provide genuine value.";
+
+    try {
+      const result = await this.callAI(prompt, systemPrompt, functions);
+      
+      if (result.type === 'function_call') {
+        let functionArgs = JSON.parse(result.function.arguments);
+        
+        // Parse string values to correct types (Groq sometimes returns strings for booleans)
+        if (typeof functionArgs.should_notify === 'string') {
+          functionArgs.should_notify = functionArgs.should_notify === 'true';
+        }
+        
+        console.log("🎯 AI decided to send notification:", functionArgs);
+        return functionArgs;
+      }
+      
+      // Fallback if no function call
+      return {
+        should_notify: false,
+        reason: "AI did not trigger notification function",
+        notification_type: "none",
+        priority: "low",
+        message: ""
+      };
+    } catch (error) {
+      console.error("Error analyzing for notification:", error);
+      return {
+        should_notify: false,
+        reason: "AI analysis failed",
+        notification_type: "none",
+        priority: "low",
+        message: ""
       };
     }
   }

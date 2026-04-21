@@ -52,11 +52,6 @@ export default function AccountSettingsBinder() {
         if (sensitivity && settings?.automation?.sunlightSensitivity) {
           sensitivity.value = settings.automation.sunlightSensitivity;
         }
-        // Theme
-        const theme = document.getElementById("themeSelect");
-        if (theme && settings?.appearance?.theme) {
-          theme.value = settings.appearance.theme;
-        }
         // System Information
         const serial = document.getElementById("serialNumber");
         const zip = document.getElementById("zipCode");
@@ -169,14 +164,7 @@ export default function AccountSettingsBinder() {
       save(payload);
     };
 
-    const onSaveTheme = () => {
-      const payload = {
-        appearance: {
-          theme: document.getElementById("themeSelect")?.value || "Light",
-        },
-      };
-      save(payload);
-    };
+    // Theme functionality removed - appearance column doesn't exist in database
 
     const onSaveSystem = async () => {
       const serialEl = document.getElementById("serialNumber");
@@ -257,7 +245,6 @@ export default function AccountSettingsBinder() {
 
     prefBtn?.addEventListener("click", onSavePrefs);
     autoBtn?.addEventListener("click", onSaveAuto);
-    themeBtn?.addEventListener("click", onSaveTheme);
     systemBtn?.addEventListener("click", onSaveSystem);
     updateSerialBtn?.addEventListener("click", onUpdateSerial);
     updateZipBtn?.addEventListener("click", onUpdateZip);
@@ -265,7 +252,6 @@ export default function AccountSettingsBinder() {
     return () => {
       prefBtn?.removeEventListener("click", onSavePrefs);
       autoBtn?.removeEventListener("click", onSaveAuto);
-      themeBtn?.removeEventListener("click", onSaveTheme);
       systemBtn?.removeEventListener("click", onSaveSystem);
       updateSerialBtn?.removeEventListener("click", onUpdateSerial);
       updateZipBtn?.removeEventListener("click", onUpdateZip);

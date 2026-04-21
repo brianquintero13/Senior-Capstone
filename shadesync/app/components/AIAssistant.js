@@ -1,9 +1,44 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export default function AIAssistant({ isNight }) {
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("schedule");
+  const [insights, setInsights] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchAIInsights();
+    }
+  }, [isOpen]);
+
+  const fetchAIInsights = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch("/api/ai-insights");
+      if (response.ok) {
+        const data = await response.json();
+        setInsights(data);
+      }
+    } catch (error) {
+      console.error("Error fetching AI insights:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const parseWeatherRecommendation = (suggestion) => {
+    if (!suggestion) return { recommendation: null, reason: null };
+    
+    const recommendationMatch = suggestion.match(/Recommendation:\s*(OPEN|CLOSED)/i);
+    const reasonMatch = suggestion.match(/Reason:\s*(.+)/i);
+    
+    return {
+      recommendation: recommendationMatch ? recommendationMatch[1].toUpperCase() : null,
+      reason: reasonMatch ? reasonMatch[1].trim() : suggestion
+    };
+  };
 
   const handleRecommendedSchedule = () => {
     setActiveTab("schedule");
@@ -110,112 +145,120 @@ export default function AIAssistant({ isNight }) {
 
             {/* Content */}
             <div className="min-h-[200px]">
-              {activeTab === "schedule" && (
-                <div className="space-y-4">
-                  <h3 className="font-semibold flex items-center gap-2">
-                    📅 Recommended Schedule
-                  </h3>
-                  <div className={`p-4 rounded-lg ${
-                    isNight ? "bg-slate-700" : "bg-slate-50"
-                  }`}>
-                    <p className="text-sm mb-3">
-                      Based on your usage patterns, here are my recommendations:
-                    </p>
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm">Weekday Open:</span>
-                        <span className="font-medium">8:30 AM</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm">Weekday Close:</span>
-                        <span className="font-medium">6:45 PM</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm">Weekend Open:</span>
-                        <span className="font-medium">9:00 AM</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm">Weekend Close:</span>
-                        <span className="font-medium">7:30 PM</span>
-                      </div>
-                    </div>
-                    <button className={`w-full mt-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      isNight 
-                        ? "bg-purple-600 hover:bg-purple-700 text-white" 
-                        : "bg-purple-500 hover:bg-purple-600 text-white"
-                    }`}>
-                      Apply These Times
-                    </button>
-                  </div>
+              {loading && (
+                <div className="flex items-center justify-center h-48">
+                  <div className="text-sm opacity-70">Loading AI insights...</div>
                 </div>
               )}
-
-              {activeTab === "weather" && (
+              {!loading && activeTab === "schedule" && (
                 <div className="space-y-4">
                   <h3 className="font-semibold flex items-center gap-2">
-                    🌤️ Weather Report
-                  </h3>
-                  <div className={`p-4 rounded-lg ${
-                    isNight ? "bg-slate-700" : "bg-slate-50"
-                  }`}>
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-2xl">☀️</span>
-                      <span className="text-2xl font-bold">77°F</span>
-                    </div>
-                    <p className="text-sm mb-3">
-                      Clear sky with plenty of sunshine. Perfect weather for keeping your shades closed during peak hours to maintain comfortable indoor temperature.
-                    </p>
-                    <div className="grid grid-cols-2 gap-2 text-sm">
-                      <div>
-                        <span className="opacity-70">Humidity:</span>
-                        <span className="ml-2 font-medium">65%</span>
-                      </div>
-                      <div>
-                        <span className="opacity-70">UV Index:</span>
-                        <span className="ml-2 font-medium">High</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {activeTab === "patterns" && (
-                <div className="space-y-4">
-                  <h3 className="font-semibold flex items-center gap-2">
-                    📊 Your Patterns
+                    📅 Schedule Suggestions
                   </h3>
                   <div className={`p-4 rounded-lg ${
                     isNight ? "bg-slate-700" : "bg-slate-50"
                   }`}>
                     <p className="text-sm mb-3">
-                      Here's what I've learned about your shade usage:
+                      {insights?.scheduleSuggestions || "No schedule suggestions available yet."}
                     </p>
-                    <div className="space-y-3">
-                      <div>
-                        <div className="flex justify-between items-center mb-1">
-                          <span className="text-sm">Most Common Open Time</span>
-                          <span className="font-medium">9:00 AM</span>
-                        </div>
-                        <div className="w-full bg-slate-200 rounded-full h-2">
-                          <div className="bg-purple-500 h-2 rounded-full" style={{width: "70%"}}></div>
-                        </div>
-                      </div>
-                      <div>
-                        <div className="flex justify-between items-center mb-1">
-                          <span className="text-sm">Most Common Close Time</span>
-                          <span className="font-medium">6:00 PM</span>
-                        </div>
-                        <div className="w-full bg-slate-200 rounded-full h-2">
-                          <div className="bg-purple-500 h-2 rounded-full" style={{width: "85%"}}></div>
-                        </div>
-                      </div>
-                      <div className="pt-2 border-t border-slate-200">
+                    {insights?.usagePatterns?.mostCommonWeekdayOpen && (
+                      <div className="space-y-2 mt-3">
                         <div className="flex justify-between items-center">
-                          <span className="text-sm">Manual Adjustments (30 days)</span>
-                          <span className="font-medium">15</span>
+                          <span className="text-sm">Weekday Open:</span>
+                          <span className="font-medium">{insights.usagePatterns.mostCommonWeekdayOpen}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm">Weekday Close:</span>
+                          <span className="font-medium">{insights.usagePatterns.mostCommonWeekdayClose}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm">Weekend Open:</span>
+                          <span className="font-medium">{insights.usagePatterns.mostCommonWeekendOpen}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm">Weekend Close:</span>
+                          <span className="font-medium">{insights.usagePatterns.mostCommonWeekendClose}</span>
                         </div>
                       </div>
-                    </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {!loading && activeTab === "weather" && (
+                <div className="space-y-4">
+                  <h3 className="font-semibold flex items-center gap-2">
+                    🌤️ Weather-Based Recommendation
+                  </h3>
+                  <div className={`p-4 rounded-lg ${
+                    isNight ? "bg-slate-700" : "bg-slate-50"
+                  }`}>
+                    {(() => {
+                      const { recommendation, reason } = parseWeatherRecommendation(insights?.weatherSuggestion);
+                      if (!recommendation) {
+                        return <p className="text-sm">{insights?.weatherSuggestion || "No weather suggestions available yet."}</p>;
+                      }
+                      return (
+                        <div className="space-y-3">
+                          <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium ${
+                            recommendation === 'OPEN' 
+                              ? 'bg-green-100 text-green-700' 
+                              : 'bg-red-100 text-red-700'
+                          }`}>
+                            <span className="text-lg">
+                              {recommendation === 'OPEN' ? '🔓' : '🔒'}
+                            </span>
+                            <span>{recommendation}</span>
+                          </div>
+                          <p className="text-sm">
+                            {reason}
+                          </p>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+              )}
+
+              {!loading && activeTab === "patterns" && (
+                <div className="space-y-4">
+                  <h3 className="font-semibold flex items-center gap-2">
+                    📊 Usage Patterns
+                  </h3>
+                  <div className={`p-4 rounded-lg ${
+                    isNight ? "bg-slate-700" : "bg-slate-50"
+                  }`}>
+                    <p className="text-sm mb-3">
+                      {insights?.usagePatterns?.message || "No pattern data available yet."}
+                    </p>
+                    {insights?.usagePatterns && (
+                      <div className="space-y-3">
+                        {insights.usagePatterns.mostCommonOpenTime && (
+                          <div>
+                            <div className="flex justify-between items-center mb-1">
+                              <span className="text-sm">Most Common Open Time</span>
+                              <span className="font-medium">{insights.usagePatterns.mostCommonOpenTime}</span>
+                            </div>
+                          </div>
+                        )}
+                        {insights.usagePatterns.mostCommonCloseTime && (
+                          <div>
+                            <div className="flex justify-between items-center mb-1">
+                              <span className="text-sm">Most Common Close Time</span>
+                              <span className="font-medium">{insights.usagePatterns.mostCommonCloseTime}</span>
+                            </div>
+                          </div>
+                        )}
+                        {insights.usagePatterns.totalOperations !== undefined && (
+                          <div className="pt-2 border-t border-slate-200">
+                            <div className="flex justify-between items-center">
+                              <span className="text-sm">Manual Adjustments (30 days)</span>
+                              <span className="font-medium">{insights.usagePatterns.totalOperations}</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

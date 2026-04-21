@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { supabaseService } from "@/lib/supabaseService";
 import { aiService } from "@/lib/aiService";
+import { getUserSettings } from "@/lib/databaseSettingsStore";
 
 export async function GET() {
   try {
@@ -13,13 +14,17 @@ export async function GET() {
 
     console.log("🤖 Generating AI insights with OpenAI...");
 
-    // Get user device info (zip_code column doesn't exist)
+    // Get user device info
     const { data: device, error: deviceError } = await supabaseService
       .from("devices")
       .select("id, owner_id")
       .eq("owner_id", session.user.id)
       .limit(1)
       .single();
+
+    // Get user settings for zip code
+    const userSettings = await getUserSettings(session.user.id);
+    const userZipCode = userSettings?.system?.zipCode || "33615";
 
     if (deviceError || !device) {
       console.log("No device found, returning default insights");
@@ -41,13 +46,12 @@ export async function GET() {
 
     const currentShadeState = shadeStateData?.state || "unknown";
 
-    // Get weather data (use Tampa zip code as default)
+    // Get weather data (use user's zip code if available, otherwise Tampa as fallback)
     let weather = { main: { temp: 0 }, weather: [{ description: "Unknown" }] };
-    const defaultZipCode = "33615"; // Tampa, FL
     try {
       const apiKey = process.env.OPEN_WEATHER_API_KEY;
       const geoResponse = await fetch(
-        `http://api.openweathermap.org/geo/1.0/zip?zip=${defaultZipCode},US&appid=${apiKey}`
+        `http://api.openweathermap.org/geo/1.0/zip?zip=${userZipCode},US&appid=${apiKey}`
       );
       
       if (geoResponse.ok) {
