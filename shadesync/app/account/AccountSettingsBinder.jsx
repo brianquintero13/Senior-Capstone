@@ -55,6 +55,7 @@ export default function AccountSettingsBinder() {
         // System Information
         const serial = document.getElementById("serialNumber");
         const zip = document.getElementById("zipCode");
+        const esp32IpMain = document.getElementById("esp32IpMain");
         const serialInputRow = document.getElementById("serialInputRow");
         const zipInputRow = document.getElementById("zipInputRow");
         const serialDisplayRow = document.getElementById("serialDisplayRow");
@@ -64,6 +65,7 @@ export default function AccountSettingsBinder() {
 
         let serialStr = typeof settings?.system?.serialNumber === "string" ? settings.system.serialNumber : "";
         const zipStr = typeof settings?.system?.zipCode === "string" ? settings.system.zipCode : "";
+        const esp32IpStr = typeof settings?.system?.esp32Ip === "string" ? settings.system.esp32Ip : "";
 
         // Prefer device serial from backend if available
         try {
@@ -80,6 +82,7 @@ export default function AccountSettingsBinder() {
 
         if (serial) serial.value = serialStr;
         if (zip) zip.value = zipStr;
+        if (esp32IpMain) esp32IpMain.value = esp32IpStr;
 
         // Toggle UI based on presence
         if (serialStr) {
@@ -167,11 +170,11 @@ export default function AccountSettingsBinder() {
     // Theme functionality removed - appearance column doesn't exist in database
 
     const onSaveSystem = async () => {
-      const serialEl = document.getElementById("serialNumber");
-      const zipEl = document.getElementById("zipCode");
-      const serial = (serialEl?.value || "").trim();
-      const zip = (zipEl?.value || "").trim();
-      setSaving(true);
+      const serial = document.getElementById("serialNumber")?.value?.trim();
+      const zip = document.getElementById("zipCode")?.value?.trim();
+      const esp32Ip = document.getElementById("esp32Ip")?.value?.trim();
+      const shouldReturnHome = !serial && zip;
+
       setMessage("");
       setError(false);
 
@@ -195,11 +198,12 @@ export default function AccountSettingsBinder() {
         }
       }
 
-      // Persist zip (and optionally serial) to settings store for display
+      // Persist zip, serial, and esp32Ip to settings store for display
       const payload = {
         system: {
           serialNumber: serial,
           zipCode: zip,
+          esp32Ip: esp32Ip,
         },
       };
 
@@ -278,6 +282,72 @@ export default function AccountSettingsBinder() {
       }
     };
 
+    const onReconfigureWiFi = async () => {
+      const esp32Ip = document.getElementById("esp32Ip")?.value?.trim();
+      
+      if (!esp32Ip) {
+        toast.error("Please enter the device's IP address to reconfigure WiFi");
+        return;
+      }
+
+      if (!confirm("This will clear the device's WiFi credentials and reboot it into AP mode. You will need to reconnect to 'ShadeSync-Setup' WiFi to configure a new network. Continue?")) {
+        return;
+      }
+
+      try {
+        const response = await fetch("/api/wifi-config/clear", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ esp32Ip }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || "Failed to clear WiFi credentials");
+        }
+
+        const result = await response.json();
+        toast.success("WiFi credentials cleared. Device is rebooting into AP mode.");
+      } catch (err) {
+        console.error("WiFi clear error:", err);
+        toast.error(`Failed to clear WiFi credentials: ${err.message}`);
+      }
+    };
+
+    const onUpdateEsp32Ip = async () => {
+      const esp32Ip = document.getElementById("esp32IpMain")?.value?.trim();
+      
+      if (!esp32Ip) {
+        toast.error("Please enter the device's IP address");
+        return;
+      }
+
+      try {
+        const payload = {
+          system: {
+            esp32Ip: esp32Ip,
+          },
+        };
+
+        const res = await fetch("/api/settings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) {
+          throw new Error("Failed to update ESP32 IP");
+        }
+
+        toast.success("Device IP address updated successfully");
+      } catch (err) {
+        console.error("ESP32 IP update error:", err);
+        toast.error(`Failed to update device IP: ${err.message}`);
+      }
+    };
+
     prefBtn?.addEventListener("click", onSavePrefs);
     autoBtn?.addEventListener("click", onSaveAuto);
     systemBtn?.addEventListener("click", onSaveSystem);
@@ -285,6 +355,10 @@ export default function AccountSettingsBinder() {
     updateZipBtn?.addEventListener("click", onUpdateZip);
     const wifiBtn = document.getElementById("saveWiFiBtn");
     wifiBtn?.addEventListener("click", onSaveWiFi);
+    const reconfigureWiFiBtn = document.getElementById("reconfigureWiFiBtn");
+    reconfigureWiFiBtn?.addEventListener("click", onReconfigureWiFi);
+    const updateEsp32IpBtn = document.getElementById("updateEsp32IpBtn");
+    updateEsp32IpBtn?.addEventListener("click", onUpdateEsp32Ip);
 
     return () => {
       prefBtn?.removeEventListener("click", onSavePrefs);

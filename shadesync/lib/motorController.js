@@ -1,5 +1,6 @@
 import { EventEmitter } from "events";
 import { shadeStateManager, SHADE_STATES } from "./shadeStateManager.js";
+import { getUserSettings } from "./databaseSettingsStore.js";
 
 const DEFAULT_TIMEOUT_MS = 25000;
 const DEFAULT_ESP32_HTTP_TIMEOUT_MS = 20000;
@@ -19,7 +20,6 @@ class WiFiMotorController extends EventEmitter {
     this.lastError = null;
     this.commandStartedAt = null;
     this.commandTimeout = null;
-    this.esp32IP = process.env.ESP32_IP;
     console.log("WiFi motor controller initialized - using HTTP requests to ESP32");
     this.initializeState();
   }
@@ -45,14 +45,40 @@ class WiFiMotorController extends EventEmitter {
     };
   }
 
+  async getESP32IP() {
+    // Try to get ESP32 IP from user settings first
+    try {
+      const userSettings = await getUserSettings();
+      const esp32Ip = userSettings?.system?.esp32Ip;
+      if (esp32Ip) {
+        console.log(`Using ESP32 IP from user settings: ${esp32Ip}`);
+        return esp32Ip;
+      }
+    } catch (err) {
+      console.log(`⚠️ Failed to get ESP32 IP from user settings: ${err?.message}`);
+    }
+
+    // Fallback to environment variable
+    const envIP = process.env.ESP32_IP;
+    if (envIP) {
+      console.log(`Using ESP32 IP from environment variable: ${envIP}`);
+      return envIP;
+    }
+
+    // Default to AP mode IP
+    console.log(`Using default ESP32 AP IP: 192.168.4.1`);
+    return "192.168.4.1";
+  }
+
   async ensureConnected() {
-    if (!this.esp32IP) {
-      const err = new Error("ESP32_IP is not configured in environment variables");
+    const esp32IP = await this.getESP32IP();
+    if (!esp32IP) {
+      const err = new Error("ESP32 IP is not configured");
       err.code = "ESP32_IP_MISSING";
       throw err;
     }
-    console.log(`Ready to communicate with ESP32 at ${this.esp32IP} via WiFi`);
-    return;
+    console.log(`Ready to communicate with ESP32 at ${esp32IP} via WiFi`);
+    return esp32IP;
   }
 
   setState(nextState, patch = {}) {
@@ -93,7 +119,7 @@ class WiFiMotorController extends EventEmitter {
     }, timeoutMs);
   }
 
-  async sendCommand(action) {
+  async sendCommand(action, esp32IpOverride = null) {
     const normalized = String(action || "").trim().toLowerCase();
     if (!["open", "close"].includes(normalized)) {
       const err = new Error("Invalid motor action");
@@ -115,7 +141,20 @@ class WiFiMotorController extends EventEmitter {
       throw err;
     }
 
-    await this.ensureConnected();
+    // Use provided IP override, or fetch dynamically
+    let esp32IP;
+    if (esp32IpOverride) {
+      esp32IP = esp32IpOverride;
+      console.log(`Using ESP32 IP override: ${esp32IP}`);
+    } else {
+      esp32IP = await this.getESP32IP();
+      if (!esp32IP) {
+        const err = new Error("ESP32 IP is not configured");
+        err.code = "ESP32_IP_MISSING";
+        throw err;
+      }
+      console.log(`Ready to communicate with ESP32 at ${esp32IP} via WiFi`);
+    }
 
     this.setState(STATES.BUSY, {
       currentAction: normalized,
@@ -128,7 +167,7 @@ class WiFiMotorController extends EventEmitter {
 
     try {
       // Use HTTP request to ESP32 via WiFi
-      const url = `http://${this.esp32IP}/${command}`;
+      const url = `http://${esp32IP}/${command}`;
       console.log(`📡 Sending HTTP request to ESP32: ${url}`);
       
       const httpTimeoutMs = Number(

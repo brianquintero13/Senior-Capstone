@@ -81,6 +81,46 @@ bool hasStoredCredentials() {
   return (firstChar != 0 && firstChar != 255);
 }
 
+// Function to clear WiFi credentials from EEPROM
+void clearWiFiCredentials() {
+  EEPROM.begin(EEPROM_SIZE);
+  
+  // Clear SSID
+  for (int i = 0; i < 50; i++) {
+    EEPROM.write(SSID_ADDR + i, 0);
+  }
+  
+  // Clear password
+  for (int i = 0; i < 50; i++) {
+    EEPROM.write(PASSWORD_ADDR + i, 0);
+  }
+  
+  EEPROM.commit();
+  EEPROM.end();
+  Serial.println("WiFi credentials cleared from EEPROM");
+}
+
+// Function to decode URL-encoded strings
+String urlDecode(String input) {
+  String output = "";
+  for (int i = 0; i < input.length(); i++) {
+    char c = input.charAt(i);
+    if (c == '+') {
+      output += ' ';
+    } else if (c == '%') {
+      if (i + 2 < input.length()) {
+        String hex = input.substring(i + 1, i + 3);
+        char decoded = (char)strtol(hex.c_str(), NULL, 16);
+        output += decoded;
+        i += 2;
+      }
+    } else {
+      output += c;
+    }
+  }
+  return output;
+}
+
 void rotateMotor(int direction) {
   isMoving = true;
   digitalWrite(DIR_PIN, direction);
@@ -104,6 +144,19 @@ void setup() {
   Serial.println("ESP32 Starting Up...");
   Serial.println("=================================");
   
+  // Check if BOOT button is pressed to clear EEPROM
+  pinMode(0, INPUT_PULLUP);
+  delay(100);
+  if (digitalRead(0) == LOW) {
+    Serial.println("BOOT button pressed - clearing WiFi credentials from EEPROM");
+    clearWiFiCredentials();
+    Serial.println("EEPROM cleared. Release BOOT button and restart to configure new WiFi.");
+    while (digitalRead(0) == LOW) {
+      delay(100);
+    }
+    ESP.restart();
+  }
+  
   // Motor pins
   pinMode(STEP_PIN, OUTPUT);
   pinMode(DIR_PIN, OUTPUT);
@@ -116,6 +169,22 @@ void setup() {
   if (hasStoredCredentials()) {
     Serial.println("Found stored WiFi credentials");
     loadWiFiCredentials();
+    
+    // Validate SSID is not empty
+    if (strlen(ssid) == 0 || ssid[0] == 0 || ssid[0] == 255) {
+      Serial.println("Invalid SSID in EEPROM, clearing and starting AP mode");
+      clearWiFiCredentials();
+      WiFi.mode(WIFI_AP);
+      WiFi.softAP("ShadeSync-Setup", "setup1234");
+      Serial.println("AP mode started");
+      Serial.print("AP IP: ");
+      Serial.println(WiFi.softAPIP());
+      server.begin();
+      Serial.println("Server started in AP mode");
+      Serial.println("Connect to 'ShadeSync-Setup' WiFi and configure your network");
+      Serial.println("=================================");
+      return;
+    }
   } else {
     Serial.println("No stored WiFi credentials found");
     Serial.println("Please configure WiFi via the web interface");
@@ -197,21 +266,26 @@ void setup() {
     Serial.println("Server started");
     Serial.println("=================================");
   } else {
-    Serial.println("Failed to connect to WiFi!");
-    Serial.println("Switching to AP mode for reconfiguration");
+    Serial.println("Failed to connect to WiFi after all attempts");
+    Serial.println("Clearing credentials and starting AP mode for reconfiguration");
+    clearWiFiCredentials();
+    
+    // Start in AP mode for reconfiguration
     WiFi.mode(WIFI_AP);
     WiFi.softAP("ShadeSync-Setup", "setup1234");
+    Serial.println("AP mode started");
     Serial.print("AP IP: ");
     Serial.println(WiFi.softAPIP());
     server.begin();
     Serial.println("Server started in AP mode");
+    Serial.println("Connect to 'ShadeSync-Setup' WiFi and configure your network");
     Serial.println("=================================");
   }
 }
 
 void loop() {
-  // Check WiFi connection and reconnect if lost
-  if (WiFi.status() != WL_CONNECTED) {
+  // Only check WiFi connection if we're in STA mode (not AP mode)
+  if (WiFi.getMode() == WIFI_STA && WiFi.status() != WL_CONNECTED) {
     Serial.println("WiFi disconnected, attempting to reconnect...");
     WiFi.disconnect();
     delay(1000);
@@ -275,7 +349,10 @@ void loop() {
     client.println();
     
     // Check for commands in the request
-    if (request.indexOf("GET /OPEN") != -1) {
+    if (request.indexOf("GET / ") != -1 || request.indexOf("GET /index.html") != -1) {
+      // Root path - return simple response
+      client.print("ShadeSync ESP32 is running in AP mode. Please configure WiFi via your website.");
+    } else if (request.indexOf("GET /OPEN") != -1) {
       if (!isMoving) {
         Serial.println("Received OPEN command");
         rotateMotor(OPEN_DIR);
@@ -304,9 +381,9 @@ void loop() {
       String newSSID = request.substring(ssidStart, ssidEnd);
       String newPassword = request.substring(passwordStart, passwordEnd);
       
-      // Decode URL encoding
-      newSSID.replace("+", " ");
-      newPassword.replace("+", " ");
+      // Decode URL encoding (handles %20 for spaces, etc.)
+      newSSID = urlDecode(newSSID);
+      newPassword = urlDecode(newPassword);
       
       Serial.println("Received WiFi credentials:");
       Serial.print("SSID: ");
@@ -321,6 +398,13 @@ void loop() {
       
       client.print("WiFi credentials saved. Rebooting...");
       Serial.println("Rebooting ESP32 to apply new WiFi settings...");
+      delay(1000);
+      ESP.restart();
+    } else if (request.indexOf("GET /CLEAR_WIFI") != -1) {
+      // Clear WiFi credentials and reboot into AP mode
+      clearWiFiCredentials();
+      client.print("WiFi credentials cleared. Rebooting into AP mode...");
+      Serial.println("Rebooting ESP32 into AP mode for reconfiguration...");
       delay(1000);
       ESP.restart();
     } else {

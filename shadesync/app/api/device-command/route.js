@@ -3,7 +3,7 @@ import { authOptions } from "@/lib/auth";
 import { supabaseService } from "@/lib/supabaseService";
 import { getResolvedDeviceMode, saveDeviceMode } from "@/lib/deviceModeStore";
 import { motorController } from "@/lib/motorController";
-import { incrementManualOperationCount } from "@/lib/databaseSettingsStore";
+import { incrementManualOperationCount, getUserSettings } from "@/lib/databaseSettingsStore";
 
 export const runtime = "nodejs";
 
@@ -102,8 +102,20 @@ export async function POST(req) {
     saveDeviceMode(device.id, "manual", overrideExpiresAt);
   }
 
+  // Fetch ESP32 IP from user settings for this command
+  let esp32Ip = null;
   try {
-    const result = await motorController.sendCommand(action);
+    const userSettings = await getUserSettings(session.user.id);
+    esp32Ip = userSettings?.system?.esp32Ip;
+    if (esp32Ip) {
+      console.log(`Using ESP32 IP from user settings: ${esp32Ip}`);
+    }
+  } catch (err) {
+    console.log(`Failed to get ESP32 IP from settings: ${err?.message}`);
+  }
+
+  try {
+    const result = await motorController.sendCommand(action, esp32Ip);
     if (result.code === "REDUNDANT_OPERATION") {
       return Response.json(
         { 

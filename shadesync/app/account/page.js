@@ -207,6 +207,9 @@ export default async function AccountPage() {
             <div className="rounded-2xl border border-slate-200 bg-white/90 p-6">
               <h2 className="text-lg font-semibold text-slate-900">Device WiFi Configuration</h2>
               <p className="mt-2 text-slate-700">Configure your ESP32 device to connect to your WiFi network.</p>
+              <p className="mt-2 text-xs text-amber-600 font-medium">
+                ⚠️ Note: When connecting to the device's "ShadeSync-Setup" WiFi, it will show "no internet" - this is normal. You can still access this website to configure your WiFi.
+              </p>
 
               <div className="mt-4 space-y-4">
                 <div>
@@ -231,6 +234,20 @@ export default async function AccountPage() {
                     placeholder="Your WiFi password"
                   />
                 </div>
+                <div>
+                  <label htmlFor="esp32IpMain" className="block text-sm font-medium text-slate-700">
+                    Device IP Address (Update after network change)
+                  </label>
+                  <input
+                    type="text"
+                    id="esp32IpMain"
+                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+                    placeholder="e.g., 192.168.1.50"
+                  />
+                  <p className="mt-1 text-xs text-slate-500">
+                    Find this in your router's device list. Update this after changing WiFi networks.
+                  </p>
+                </div>
               </div>
 
               <button
@@ -239,6 +256,37 @@ export default async function AccountPage() {
               >
                 Send WiFi Configuration to Device
               </button>
+              <button
+                id="updateEsp32IpBtn"
+                className="mt-2 w-full rounded-lg border border-slate-300 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
+              >
+                Update Device IP Address
+              </button>
+
+              <div className="mt-6 border-t border-slate-200 pt-4">
+                <h3 className="text-sm font-semibold text-slate-900">Reconfigure WiFi</h3>
+                <p className="mt-2 text-xs text-slate-600">
+                  To reconfigure your device's WiFi, you need to enter the device's current IP address. 
+                  Find it by logging into your router and checking the list of connected devices (look for "ShadeSync" or "ESP32").
+                </p>
+                <div className="mt-3">
+                  <label htmlFor="esp32Ip" className="block text-sm font-medium text-slate-700">
+                    Device IP Address (Required for reconfiguration)
+                  </label>
+                  <input
+                    type="text"
+                    id="esp32Ip"
+                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+                    placeholder="e.g., 192.168.1.50"
+                  />
+                </div>
+                <button
+                  id="reconfigureWiFiBtn"
+                  className="mt-3 w-full rounded-lg border border-red-300 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-100"
+                >
+                  Reconfigure WiFi (Device will restart in AP mode)
+                </button>
+              </div>
               <p className="mt-2 text-xs text-slate-500">
                 The device will reboot after receiving new WiFi credentials.
               </p>
