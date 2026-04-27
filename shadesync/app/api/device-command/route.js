@@ -75,10 +75,6 @@ export async function POST(req) {
   }
   const manualOverrideActive = effectiveMode === "manual" && Boolean(expiresAt) && !hasExpired;
 
-  if (manualOverrideActive && source === "schedule") {
-    return Response.json({ error: "Device is in manual mode; schedule commands are blocked" }, { status: 409 });
-  }
-
   if (source === "manual" && effectiveMode === "manual") {
     const overrideMinutes = Number(process.env.MANUAL_OVERRIDE_MINUTES || DEFAULT_MANUAL_OVERRIDE_MINUTES);
     const overrideExpiresAt = new Date(Date.now() + Math.max(1, overrideMinutes) * 60 * 1000).toISOString();

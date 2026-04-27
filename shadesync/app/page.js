@@ -38,6 +38,7 @@ export default function Home() {
     const previousBusyRef = useRef(false);
     const seenSchedulerEventSeqRef = useRef(0);
     const seenSchedulerEventAtRef = useRef(0);
+    const commandFallbackResetRef = useRef(null);
     const { theme, loading: weatherLoading, error: weatherError, weatherData } = useWeatherTheme();
     const effectiveShadeState = lockedShadeState || shadeState;
 
@@ -156,6 +157,12 @@ export default function Home() {
 
                 // Always re-sync authoritative shade state when movement transitions to idle.
                 if (wasBusy && !isBusy) {
+                    if (commandFallbackResetRef.current) {
+                        clearTimeout(commandFallbackResetRef.current);
+                        commandFallbackResetRef.current = null;
+                    }
+                    setLockedShadeState(null);
+                    setMotorCurrentAction(null);
                     fetchShadeState();
                 }
             } catch {
@@ -197,7 +204,13 @@ export default function Home() {
         stream.onerror = () => {
             // Let EventSource auto-reconnect; surface stale-state warning only if needed later.
         };
-        return () => stream.close();
+        return () => {
+            if (commandFallbackResetRef.current) {
+                clearTimeout(commandFallbackResetRef.current);
+                commandFallbackResetRef.current = null;
+            }
+            stream.close();
+        };
     }, [session?.user, fetchShadeState]);
 
     const handleToggleSchedule = async () => {
@@ -295,15 +308,20 @@ export default function Home() {
             setShadeState(targetState);
             deferResetUntilMotionEnds = true;
 
-            // Keep controls locked while motor is physically moving.
-            setTimeout(() => {
+            // Fallback unlock in case status stream disconnects while command succeeds.
+            commandFallbackResetRef.current = setTimeout(() => {
                 setLockedShadeState(null);
                 setMotorBusy(false);
                 setMotorCurrentAction(null);
                 fetchShadeState(); // Refresh from server once movement should be done
-            }, 8000); // Wait for motor to complete
+                commandFallbackResetRef.current = null;
+            }, 30000);
 
         } catch (err) {
+            if (commandFallbackResetRef.current) {
+                clearTimeout(commandFallbackResetRef.current);
+                commandFallbackResetRef.current = null;
+            }
             setLockedShadeState(previousLockedState);
             toast.error(err.message || "Failed to send command");
         } finally {

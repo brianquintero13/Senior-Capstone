@@ -2,6 +2,19 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 
+function isLikelyRebootDisconnect(err) {
+  const code = err?.cause?.code;
+  const message = String(err?.message || "").toLowerCase();
+
+  return (
+    code === "ECONNRESET" ||
+    code === "EPIPE" ||
+    code === "UND_ERR_SOCKET" ||
+    message.includes("socket") ||
+    message.includes("other side closed")
+  );
+}
+
 export async function POST(req) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
@@ -33,6 +46,17 @@ export async function POST(req) {
       message: result 
     });
   } catch (err) {
+    if (isLikelyRebootDisconnect(err)) {
+      return NextResponse.json(
+        {
+          success: true,
+          accepted: true,
+          message: "Request sent. Device likely disconnected while rebooting into AP mode.",
+        },
+        { status: 202 }
+      );
+    }
+
     console.error("WiFi clear error:", err);
     return NextResponse.json({ 
       error: "Failed to clear WiFi credentials", 

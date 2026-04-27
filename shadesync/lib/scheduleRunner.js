@@ -1,6 +1,5 @@
 import { supabaseService } from "./supabaseService";
 import { motorController } from "./motorController";
-import { getResolvedDeviceMode, saveDeviceMode } from "./deviceModeStore";
 import { shadeStateManager, SHADE_STATES } from "./shadeStateManager";
 
 const RUN_INTERVAL_MS = 15000;
@@ -122,32 +121,6 @@ function emitScheduleEvent(event) {
   appendScheduleEvent(event);
 }
 
-async function resolveEffectiveMode(deviceRow) {
-  const deviceId = deviceRow?.id;
-  let mode = deviceRow?.mode || null;
-  let manualExpiresAt = deviceRow?.manual_expires_at || null;
-
-  const storedMode = getResolvedDeviceMode(deviceId);
-  if (mode) {
-    saveDeviceMode(deviceId, mode, manualExpiresAt);
-  } else if (storedMode?.mode) {
-    mode = storedMode.mode;
-    manualExpiresAt = storedMode.manual_expires_at || null;
-  }
-
-  const expiresAt = manualExpiresAt || storedMode?.manual_expires_at;
-  const hasExpired = expiresAt ? new Date(expiresAt).getTime() < Date.now() : false;
-  const baseMode = mode || storedMode?.mode || "auto";
-  const effectiveMode =
-    !hasExpired && baseMode === "manual" && Boolean(expiresAt)
-      ? "manual"
-      : "auto";
-  if (hasExpired) {
-    saveDeviceMode(deviceId, "auto", null);
-  }
-  return effectiveMode;
-}
-
 async function executeScheduledAction({ device, scheduleId, entry, now, trigger }) {
   const action = String(entry?.action || "").toLowerCase();
   if (!["open", "close"].includes(action)) {
@@ -204,7 +177,7 @@ async function executeScheduledAction({ device, scheduleId, entry, now, trigger 
       timeZone,
       trigger,
     });
-    await motorController.sendCommand(action);
+    await motorController.sendCommand(action, { userId: device.owner_id });
 
     const nowIso = new Date().toISOString();
     await supabaseService.from("device_commands").insert({
@@ -343,26 +316,6 @@ async function runScheduleTick(trigger = "unknown") {
 
     const dueEntries = (entries || []).filter((entry) => isEntryDueNow(entry, now));
     if (!dueEntries.length) {
-      continue;
-    }
-
-    const effectiveMode = await resolveEffectiveMode(device);
-    if (effectiveMode === "manual") {
-      const dueActions = dueEntries.map((entry) => entry.action).join(",");
-      log(`SKIP device=${device.id} reason="Manual mode active" trigger=${trigger} dueActions=${dueActions}`);
-      for (const entry of dueEntries) {
-        const action = String(entry?.action || "").toLowerCase();
-        if (["open", "close"].includes(action)) {
-          emitScheduleEvent({
-            ownerId: device.owner_id,
-            deviceId: device.id,
-            outcome: "skip",
-            action,
-            reason: "Manual mode active",
-            trigger,
-          });
-        }
-      }
       continue;
     }
 

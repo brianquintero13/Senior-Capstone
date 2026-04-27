@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -13,6 +13,9 @@ export default function AccountSettingsBinder() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [shouldReturnHome, setShouldReturnHome] = useState(false);
+  const wifiConfigInFlightRef = useRef(false);
+  const wifiClearInFlightRef = useRef(false);
+  const esp32IpUpdateInFlightRef = useRef(false);
 
   useEffect(() => {
     const missingSerial = searchParams?.get("missingSerial");
@@ -138,7 +141,6 @@ export default function AccountSettingsBinder() {
   useEffect(() => {
     const prefBtn = document.getElementById("savePreferencesBtn");
     const autoBtn = document.getElementById("saveAutomationBtn");
-    const themeBtn = document.getElementById("saveThemeBtn");
     const systemBtn = document.getElementById("saveSystemBtn");
     const updateSerialBtn = document.getElementById("updateSerialBtn");
     const updateZipBtn = document.getElementById("updateZipBtn");
@@ -248,15 +250,28 @@ export default function AccountSettingsBinder() {
     };
 
     const onSaveWiFi = async () => {
+      if (wifiConfigInFlightRef.current) {
+        return;
+      }
+
+      setMessage("");
+      setError(false);
+
       const ssid = document.getElementById("wifiSSID")?.value?.trim();
       const password = document.getElementById("wifiPassword")?.value?.trim();
 
       if (!ssid || !password) {
-        toast.error("Please enter both WiFi name and password");
+        setError(true);
+        setMessage("Please enter both WiFi name and password");
         return;
       }
 
+      const wifiBtn = document.getElementById("saveWiFiBtn");
+
       try {
+        wifiConfigInFlightRef.current = true;
+        if (wifiBtn) wifiBtn.disabled = true;
+
         const response = await fetch("/api/wifi-config", {
           method: "POST",
           headers: {
@@ -270,23 +285,40 @@ export default function AccountSettingsBinder() {
           throw new Error(errorData.error || "Failed to send WiFi configuration");
         }
 
-        const result = await response.json();
-        toast.success("WiFi configuration sent to device. Device will reboot.");
+        const result = await response.json().catch(() => ({}));
+        setError(false);
+        setMessage(
+          result?.accepted
+            ? "Request sent. Device is switching to the new WiFi network."
+            : "WiFi configuration sent to device. Device will reboot."
+        );
         
         // Clear the form
         document.getElementById("wifiSSID").value = "";
         document.getElementById("wifiPassword").value = "";
       } catch (err) {
         console.error("WiFi config error:", err);
-        toast.error(`Failed to send WiFi configuration: ${err.message}`);
+        setError(true);
+        setMessage(`Failed to send WiFi configuration: ${err.message}`);
+      } finally {
+        wifiConfigInFlightRef.current = false;
+        if (wifiBtn) wifiBtn.disabled = false;
       }
     };
 
     const onReconfigureWiFi = async () => {
+      if (wifiClearInFlightRef.current) {
+        return;
+      }
+
+      setMessage("");
+      setError(false);
+
       const esp32Ip = document.getElementById("esp32Ip")?.value?.trim();
       
       if (!esp32Ip) {
-        toast.error("Please enter the device's IP address to reconfigure WiFi");
+        setError(true);
+        setMessage("Please enter the device's IP address to reconfigure WiFi");
         return;
       }
 
@@ -294,7 +326,12 @@ export default function AccountSettingsBinder() {
         return;
       }
 
+      const reconfigureWiFiBtn = document.getElementById("reconfigureWiFiBtn");
+
       try {
+        wifiClearInFlightRef.current = true;
+        if (reconfigureWiFiBtn) reconfigureWiFiBtn.disabled = true;
+
         const response = await fetch("/api/wifi-config/clear", {
           method: "POST",
           headers: {
@@ -308,23 +345,45 @@ export default function AccountSettingsBinder() {
           throw new Error(errorData.error || "Failed to clear WiFi credentials");
         }
 
-        const result = await response.json();
-        toast.success("WiFi credentials cleared. Device is rebooting into AP mode.");
+        const result = await response.json().catch(() => ({}));
+        setError(false);
+        setMessage(
+          result?.accepted
+            ? "Request sent. Device is rebooting into AP mode."
+            : "WiFi credentials cleared. Device is rebooting into AP mode."
+        );
       } catch (err) {
         console.error("WiFi clear error:", err);
-        toast.error(`Failed to clear WiFi credentials: ${err.message}`);
+        setError(true);
+        setMessage(`Failed to clear WiFi credentials: ${err.message}`);
+      } finally {
+        wifiClearInFlightRef.current = false;
+        if (reconfigureWiFiBtn) reconfigureWiFiBtn.disabled = false;
       }
     };
 
     const onUpdateEsp32Ip = async () => {
-      const esp32Ip = document.getElementById("esp32IpMain")?.value?.trim();
-      
-      if (!esp32Ip) {
-        toast.error("Please enter the device's IP address");
+      if (esp32IpUpdateInFlightRef.current) {
         return;
       }
 
+      setMessage("");
+      setError(false);
+
+      const esp32Ip = document.getElementById("esp32IpMain")?.value?.trim();
+      
+      if (!esp32Ip) {
+        setError(true);
+        setMessage("Please enter the device's IP address");
+        return;
+      }
+
+      const updateEsp32IpBtn = document.getElementById("updateEsp32IpBtn");
+
       try {
+        esp32IpUpdateInFlightRef.current = true;
+        if (updateEsp32IpBtn) updateEsp32IpBtn.disabled = true;
+
         const payload = {
           system: {
             esp32Ip: esp32Ip,
@@ -341,38 +400,47 @@ export default function AccountSettingsBinder() {
           throw new Error("Failed to update ESP32 IP");
         }
 
-        toast.success("Device IP address updated successfully");
+        setError(false);
+        setMessage("Device IP address updated successfully");
       } catch (err) {
         console.error("ESP32 IP update error:", err);
-        toast.error(`Failed to update device IP: ${err.message}`);
+        setError(true);
+        setMessage(`Failed to update device IP: ${err.message}`);
+      } finally {
+        esp32IpUpdateInFlightRef.current = false;
+        if (updateEsp32IpBtn) updateEsp32IpBtn.disabled = false;
       }
     };
 
-    prefBtn?.addEventListener("click", onSavePrefs);
-    autoBtn?.addEventListener("click", onSaveAuto);
-    systemBtn?.addEventListener("click", onSaveSystem);
-    updateSerialBtn?.addEventListener("click", onUpdateSerial);
-    updateZipBtn?.addEventListener("click", onUpdateZip);
+    if (prefBtn) prefBtn.onclick = onSavePrefs;
+    if (autoBtn) autoBtn.onclick = onSaveAuto;
+    if (systemBtn) systemBtn.onclick = onSaveSystem;
+    if (updateSerialBtn) updateSerialBtn.onclick = onUpdateSerial;
+    if (updateZipBtn) updateZipBtn.onclick = onUpdateZip;
     const wifiBtn = document.getElementById("saveWiFiBtn");
-    wifiBtn?.addEventListener("click", onSaveWiFi);
+    if (wifiBtn) wifiBtn.onclick = onSaveWiFi;
     const reconfigureWiFiBtn = document.getElementById("reconfigureWiFiBtn");
-    reconfigureWiFiBtn?.addEventListener("click", onReconfigureWiFi);
+    if (reconfigureWiFiBtn) reconfigureWiFiBtn.onclick = onReconfigureWiFi;
     const updateEsp32IpBtn = document.getElementById("updateEsp32IpBtn");
-    updateEsp32IpBtn?.addEventListener("click", onUpdateEsp32Ip);
+    if (updateEsp32IpBtn) updateEsp32IpBtn.onclick = onUpdateEsp32Ip;
 
     return () => {
-      prefBtn?.removeEventListener("click", onSavePrefs);
-      autoBtn?.removeEventListener("click", onSaveAuto);
-      systemBtn?.removeEventListener("click", onSaveSystem);
-      updateSerialBtn?.removeEventListener("click", onUpdateSerial);
-      updateZipBtn?.removeEventListener("click", onUpdateZip);
-      wifiBtn?.removeEventListener("click", onSaveWiFi);
+      if (prefBtn) prefBtn.onclick = null;
+      if (autoBtn) autoBtn.onclick = null;
+      if (systemBtn) systemBtn.onclick = null;
+      if (updateSerialBtn) updateSerialBtn.onclick = null;
+      if (updateZipBtn) updateZipBtn.onclick = null;
+      if (wifiBtn) wifiBtn.onclick = null;
+      if (reconfigureWiFiBtn) reconfigureWiFiBtn.onclick = null;
+      if (updateEsp32IpBtn) updateEsp32IpBtn.onclick = null;
     };
   }, []);
 
   return (
     <>
-      <ToastContainer position="top-right" autoClose={2500} newestOnTop closeOnClick pauseOnHover />
+      <ToastPortal>
+        <ToastContainer position="top-right" autoClose={2500} newestOnTop closeOnClick pauseOnHover />
+      </ToastPortal>
       <div className="mb-4 text-sm text-slate-600">
         {loading ? "Loading settings..." : null}
       </div>

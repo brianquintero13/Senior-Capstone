@@ -45,17 +45,19 @@ class WiFiMotorController extends EventEmitter {
     };
   }
 
-  async getESP32IP() {
-    // Try to get ESP32 IP from user settings first
-    try {
-      const userSettings = await getUserSettings();
-      const esp32Ip = userSettings?.system?.esp32Ip;
-      if (esp32Ip) {
-        console.log(`Using ESP32 IP from user settings: ${esp32Ip}`);
-        return esp32Ip;
+  async getESP32IP(userId = null) {
+    // Try to get ESP32 IP from user settings first when a user context is available.
+    if (userId) {
+      try {
+        const userSettings = await getUserSettings(userId);
+        const esp32Ip = userSettings?.system?.esp32Ip;
+        if (esp32Ip) {
+          console.log(`Using ESP32 IP from user settings for user ${userId}: ${esp32Ip}`);
+          return esp32Ip;
+        }
+      } catch (err) {
+        console.log(`⚠️ Failed to get ESP32 IP from user settings for user ${userId}: ${err?.message}`);
       }
-    } catch (err) {
-      console.log(`⚠️ Failed to get ESP32 IP from user settings: ${err?.message}`);
     }
 
     // Fallback to environment variable
@@ -70,8 +72,8 @@ class WiFiMotorController extends EventEmitter {
     return "192.168.4.1";
   }
 
-  async ensureConnected() {
-    const esp32IP = await this.getESP32IP();
+  async ensureConnected(userId = null) {
+    const esp32IP = await this.getESP32IP(userId);
     if (!esp32IP) {
       const err = new Error("ESP32 IP is not configured");
       err.code = "ESP32_IP_MISSING";
@@ -119,7 +121,7 @@ class WiFiMotorController extends EventEmitter {
     }, timeoutMs);
   }
 
-  async sendCommand(action, esp32IpOverride = null) {
+  async sendCommand(action, optionsOrIp = null) {
     const normalized = String(action || "").trim().toLowerCase();
     if (!["open", "close"].includes(normalized)) {
       const err = new Error("Invalid motor action");
@@ -142,12 +144,22 @@ class WiFiMotorController extends EventEmitter {
     }
 
     // Use provided IP override, or fetch dynamically
+    let esp32IpOverride = null;
+    let userId = null;
+
+    if (typeof optionsOrIp === "string") {
+      esp32IpOverride = optionsOrIp;
+    } else if (optionsOrIp && typeof optionsOrIp === "object") {
+      esp32IpOverride = optionsOrIp.esp32Ip || null;
+      userId = optionsOrIp.userId || null;
+    }
+
     let esp32IP;
     if (esp32IpOverride) {
       esp32IP = esp32IpOverride;
       console.log(`Using ESP32 IP override: ${esp32IP}`);
     } else {
-      esp32IP = await this.getESP32IP();
+      esp32IP = await this.getESP32IP(userId);
       if (!esp32IP) {
         const err = new Error("ESP32 IP is not configured");
         err.code = "ESP32_IP_MISSING";
