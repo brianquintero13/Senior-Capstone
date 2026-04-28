@@ -239,7 +239,7 @@ export default async function AccountPage() {
                     Device IP Address (Update after network change)
                   </label>
                   <input
-                    type="text"
+                    type="password"
                     id="esp32IpMain"
                     className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
                     placeholder="e.g., 192.168.1.50"
@@ -274,7 +274,7 @@ export default async function AccountPage() {
                     Device IP Address (Required for reconfiguration)
                   </label>
                   <input
-                    type="text"
+                    type="password"
                     id="esp32Ip"
                     className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
                     placeholder="e.g., 192.168.1.50"
