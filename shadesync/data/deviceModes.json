@@ -24,7 +24,7 @@
     "manual_expires_at": "2026-04-23T20:39:40.176Z"
   },
   "1b5f3867-1397-451e-8208-96af97620c20": {
-    "mode": "manual",
-    "manual_expires_at": "2026-04-28T14:39:34.908Z"
+    "mode": "auto",
+    "manual_expires_at": null
   }
 }

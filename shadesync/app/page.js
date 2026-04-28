@@ -451,7 +451,7 @@ export default function Home() {
                         <h2 className="text-2xl font-semibold">Today&apos;s Automation</h2>
                         <div className="flex w-full flex-col gap-4 sm:flex-row">
                             <button
-                                className={`flex w-full flex-1 items-center justify-center gap-2 rounded-full border px-6 py-3 text-lg font-medium shadow hover:bg-white ${
+                                className={`flex w-full flex-1 items-center justify-center gap-2 rounded-2xl border px-6 py-3 text-lg font-medium shadow hover:bg-white ${
                                     isNight
                                         ? "border-white/30 bg-white/10 text-white hover:bg-white/20"
                                         : "border-blue-200 bg-white/70 text-slate-700"
@@ -475,7 +475,7 @@ export default function Home() {
                             </button>
 
                             <button
-                                className={`flex w-full flex-1 items-center justify-center rounded-full border px-6 py-3 text-lg font-medium shadow hover:bg-white ${
+                                className={`flex w-full flex-1 items-center justify-center rounded-2xl border px-6 py-3 text-lg font-medium shadow hover:bg-white ${
                                     isNight
                                         ? "border-white/30 bg-white/10 text-white hover:bg-white/20"
                                         : "border-blue-200 bg-white/70 text-slate-700"
@@ -528,9 +528,9 @@ export default function Home() {
                         </div>
                     </div>
 
-                    <div className="flex w-full flex-col items-center gap-4">
+                    <div className="-mt-2 flex w-full flex-col items-center gap-4">
                         <div
-                            className={`flex w-full items-center justify-between rounded-full px-6 py-3 text-lg font-medium shadow-inner ${
+                            className={`flex w-full items-center justify-between rounded-2xl border px-6 py-3 text-lg font-medium shadow-inner ${
                                 isNight ? "bg-white/10 text-white" : "bg-white/70 text-slate-700"
                             }`}
                         >
