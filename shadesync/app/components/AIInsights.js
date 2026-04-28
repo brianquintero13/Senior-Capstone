@@ -7,6 +7,7 @@ export default function AIInsights({ isNight, zipCode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [isExpanded, setIsExpanded] = useState(true);
+  const [isSendingTestEmail, setIsSendingTestEmail] = useState(false);
 
   useEffect(() => {
     fetchAIInsights();
@@ -42,6 +43,29 @@ export default function AIInsights({ isNight, zipCode }) {
     }
     // Otherwise split by numbered points or bullet points
     return tipsText.split(/\d+\.|\*\s+|\-\s+/).filter(tip => tip.trim().length > 0);
+  };
+
+  const sendTestEmail = async () => {
+    try {
+      setIsSendingTestEmail(true);
+      const response = await fetch("/api/test-ai-notification", {
+        method: "POST",
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.error || "Failed to send test email");
+      }
+
+      toast.success(
+        data?.message || "Test email request completed successfully."
+      );
+    } catch (err) {
+      console.error("Test email error:", err);
+      toast.error(err.message || "Failed to send test email.");
+    } finally {
+      setIsSendingTestEmail(false);
+    }
   };
 
   if (loading) {
@@ -85,6 +109,14 @@ export default function AIInsights({ isNight, zipCode }) {
           <span className="font-medium">AI Insights</span>
         </div>
         <div className="flex gap-2">
+          <button
+            onClick={sendTestEmail}
+            disabled={isSendingTestEmail}
+            className="text-xs px-2 py-1 rounded border border-blue-300/40 hover:border-blue-400/70 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+            title="Send a demo AI email"
+          >
+            {isSendingTestEmail ? "Sending..." : "Test Email"}
+          </button>
           <button 
             onClick={() => setIsExpanded(!isExpanded)}
             className="text-xs opacity-70 hover:opacity-100 transition-opacity transform transition-transform"
@@ -183,6 +215,7 @@ export default function AIInsights({ isNight, zipCode }) {
           </div>
         </>
       )}
+      <ToastContainer />
     </div>
   );
 }
